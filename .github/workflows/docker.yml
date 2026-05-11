@@ -212,18 +212,21 @@ jobs:
             echo "__EOF__"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Build and push (multi-arch)
+      - name: Build and push (multi-arch, Docker v2 manifest)
         id: build
         uses: docker/build-push-action@v6
         with:
           context: docker/${{ matrix.image }}
           platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.alltags.outputs.tags }}
           labels: ${{ steps.meta_ghcr.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+          # Force Docker v2.2 manifest list (not OCI). provenance/sbom disabled
+          # because both attestations require OCI mediatypes.
           provenance: false
+          sbom: false
+          outputs: type=image,oci-mediatypes=false,push=${{ github.event_name != 'pull_request' }}
 
       - name: Build single-arch local image for PR scan
         if: github.event_name == 'pull_request'
