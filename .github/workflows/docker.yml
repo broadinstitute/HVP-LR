@@ -1,0 +1,349 @@
+name: Docker Build, Push, Scan
+
+# Build, push, and Trivy-scan any docker/<image>/ that changed in this push/PR.
+# - Default branch push:  optional auto-bump VERSION -> commit [skip ci] -> build -> push -> scan
+# - Any other branch:     build only (PR: build + scan only, no push)
+# - Schedule / dispatch:  rescan :latest of every image for new CVEs
+#
+# See scripts/ci-detect-changed-images.sh and scripts/ci-bump-image-versions.sh
+# for the change-detection and version-bump logic.
+
+on:
+  push:
+    branches:
+      - '**'
+    tags:
+      - '**'
+  pull_request:
+    branches:
+      - main
+  schedule:
+    - cron: '0 6 * * 1'   # Weekly Monday rescan for new CVEs
+  workflow_dispatch:
+
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GHCR_REGISTRY: ghcr.io
+  # GCR project (without registry host); change via repo variable GCR_PROJECT.
+  GCR_PROJECT: ${{ vars.GCR_PROJECT || 'broadinstitute' }}
+  GCR_REGISTRY: us.gcr.io
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1) Detect which docker/<image>/ dirs changed in this event.
+  # ---------------------------------------------------------------------------
+  detect-changes:
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+    runs-on: ubuntu-latest
+    outputs:
+      images: ${{ steps.detect.outputs.images }}
+      any: ${{ steps.detect.outputs.any }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Detect changed image directories
+        id: detect
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: bash scripts/ci-detect-changed-images.sh
+
+  # ---------------------------------------------------------------------------
+  # 2) On default-branch push with image changes, auto-bump VERSION and push
+  #    a [skip ci] commit so the build job uses the new version.
+  # ---------------------------------------------------------------------------
+  bump-versions:
+    needs: detect-changes
+    if: >-
+      needs.detect-changes.outputs.any == 'true'
+      && github.event_name == 'push'
+      && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+      && !contains(github.event.head_commit.message, '[skip ci]')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      committed: ${{ steps.bump.outputs.committed }}
+      versions: ${{ steps.bump.outputs.versions }}
+      bumped: ${{ steps.bump.outputs.bumped }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Bump VERSION for changed images
+        id: bump
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: bash scripts/ci-bump-image-versions.sh '${{ needs.detect-changes.outputs.images }}'
+      - name: Commit and push bump
+        if: steps.bump.outputs.committed == 'true'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docker/*/Makefile
+          git commit -m "chore(docker): bump versions for ${{ steps.bump.outputs.bumped }} [skip ci]"
+          git push
+
+  # ---------------------------------------------------------------------------
+  # 3) Build, push, and Trivy-scan each changed image in parallel.
+  # ---------------------------------------------------------------------------
+  build-scan:
+    needs: [detect-changes, bump-versions]
+    if: >-
+      always()
+      && needs.detect-changes.outputs.any == 'true'
+      && needs.bump-versions.result != 'failure'
+      && github.event_name != 'schedule'
+      && github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(needs.detect-changes.outputs.images) }}
+    steps:
+      - name: Checkout (pick up auto-bump if any)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.bump-versions.outputs.committed == 'true' && github.ref || github.sha }}
+
+      - name: Read VERSION from Makefile
+        id: ver
+        run: |
+          v=$(awk -F'=' '/^[[:space:]]*VERSION[[:space:]]*=/ {gsub(/[[:space:]]/,"",$2); print $2; exit}' \
+              docker/${{ matrix.image }}/Makefile)
+          if [ -z "$v" ]; then
+            echo "::error::No VERSION in docker/${{ matrix.image }}/Makefile"
+            exit 1
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Detect GCR mirror availability
+        id: gcr
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          if [ -n "${GCP_SA_KEY:-}" ]; then
+            echo "have=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "have=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up QEMU (for arm64 cross-build)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.GHCR_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Authenticate to GCP
+        if: github.event_name != 'pull_request' && steps.gcr.outputs.have == 'true'
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Log in to GCR
+        if: github.event_name != 'pull_request' && steps.gcr.outputs.have == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.GCR_REGISTRY }}
+          username: _json_key
+          password: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Compute image refs
+        id: refs
+        run: |
+          owner_repo_lc="$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          echo "ghcr_image=${{ env.GHCR_REGISTRY }}/${owner_repo_lc}/${{ matrix.image }}" >> "$GITHUB_OUTPUT"
+          echo "gcr_image=${{ env.GCR_REGISTRY }}/${{ env.GCR_PROJECT }}/${{ matrix.image }}" >> "$GITHUB_OUTPUT"
+
+      - name: Metadata (GHCR tags)
+        id: meta_ghcr
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.refs.outputs.ghcr_image }}
+          tags: |
+            type=raw,value=${{ steps.ver.outputs.version }}
+            type=ref,event=branch
+            type=ref,event=pr
+            type=ref,event=tag
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Metadata (GCR tags)
+        id: meta_gcr
+        if: github.event_name != 'pull_request' && steps.gcr.outputs.have == 'true'
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.refs.outputs.gcr_image }}
+          tags: |
+            type=raw,value=${{ steps.ver.outputs.version }}
+            type=ref,event=branch
+            type=ref,event=pr
+            type=ref,event=tag
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Combine tag lists
+        id: alltags
+        run: |
+          {
+            echo "tags<<__EOF__"
+            echo "${{ steps.meta_ghcr.outputs.tags }}"
+            if [ -n "${{ steps.meta_gcr.outputs.tags }}" ]; then
+              echo "${{ steps.meta_gcr.outputs.tags }}"
+            fi
+            echo "__EOF__"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build and push (multi-arch)
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/${{ matrix.image }}
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.alltags.outputs.tags }}
+          labels: ${{ steps.meta_ghcr.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+          provenance: false
+
+      - name: Build single-arch local image for PR scan
+        if: github.event_name == 'pull_request'
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/${{ matrix.image }}
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: ${{ matrix.image }}:scan
+          cache-from: type=gha,scope=${{ matrix.image }}
+
+      - name: Determine scan image ref
+        id: scan_ref
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "ref=${{ matrix.image }}:scan" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=${{ steps.refs.outputs.ghcr_image }}:${{ steps.ver.outputs.version }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Pull pushed image for scan
+        if: github.event_name != 'pull_request'
+        run: docker pull ${{ steps.scan_ref.outputs.ref }}
+
+      - name: Trivy scan (table; fails build on HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.scan_ref.outputs.ref }}
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+          ignore-unfixed: true
+          ignore-policy: docker/${{ matrix.image }}/.trivy-ignore-policy.rego
+          trivyignores: docker/${{ matrix.image }}/.trivyignore
+
+      - name: Trivy scan (SARIF for Security tab)
+        if: always()
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.scan_ref.outputs.ref }}
+          format: sarif
+          output: trivy-${{ matrix.image }}.sarif
+          severity: CRITICAL,HIGH
+          limit-severities-for-sarif: true
+          ignore-unfixed: true
+          ignore-policy: docker/${{ matrix.image }}/.trivy-ignore-policy.rego
+          trivyignores: docker/${{ matrix.image }}/.trivyignore
+
+      - name: Upload Trivy SARIF
+        if: always() && github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-${{ matrix.image }}.sarif
+          category: trivy-${{ matrix.image }}
+
+  # ---------------------------------------------------------------------------
+  # 4) Scheduled / manual rescan of :latest for every image.
+  # ---------------------------------------------------------------------------
+  rescan-latest:
+    needs: detect-changes
+    if: >-
+      needs.detect-changes.outputs.any == 'true'
+      && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(needs.detect-changes.outputs.images) }}
+    steps:
+      - name: Checkout (for trivy configs)
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.GHCR_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute image ref
+        id: refs
+        run: |
+          owner_repo_lc="$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          echo "ref=${{ env.GHCR_REGISTRY }}/${owner_repo_lc}/${{ matrix.image }}:latest" >> "$GITHUB_OUTPUT"
+
+      - name: Pull latest
+        run: docker pull ${{ steps.refs.outputs.ref }}
+
+      - name: Trivy scan (table)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.refs.outputs.ref }}
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+          ignore-unfixed: true
+          ignore-policy: docker/${{ matrix.image }}/.trivy-ignore-policy.rego
+          trivyignores: docker/${{ matrix.image }}/.trivyignore
+
+      - name: Trivy scan (SARIF)
+        if: always()
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.refs.outputs.ref }}
+          format: sarif
+          output: trivy-${{ matrix.image }}.sarif
+          severity: CRITICAL,HIGH
+          limit-severities-for-sarif: true
+          ignore-unfixed: true
+          ignore-policy: docker/${{ matrix.image }}/.trivy-ignore-policy.rego
+          trivyignores: docker/${{ matrix.image }}/.trivyignore
+
+      - name: Upload Trivy SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-${{ matrix.image }}.sarif
+          category: trivy-${{ matrix.image }}
