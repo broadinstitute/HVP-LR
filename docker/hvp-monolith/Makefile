@@ -56,20 +56,19 @@ build_no_cache:
 	    $(BUILDX_ATTEST_OFF) \
 	    -t $(IMAGE_NAME):$(VERSION) -t $(IMAGE_NAME):latest .
 
+# Internal name for the multi-arch buildx builder used by `push`.
+BUILDER = hvp-builder
+
 # Multi-arch build + push to every entry in REPOS as Docker v2.2 manifest list.
-# Requires:
-#   * `docker login` to each registry in REPOS
-#   * a buildx builder with multi-platform support (run `make buildx_builder` once)
+# Requires `docker login` to each registry in REPOS. The multi-arch builder is
+# created on demand if it doesn't already exist.
 # Does NOT depend on `build` — buildx builds and pushes in one shot from source.
 push:
-	docker buildx build --platform $(PLATFORMS) \
+	@docker buildx inspect $(BUILDER) >/dev/null 2>&1 || \
+	    docker buildx create --name $(BUILDER) --driver docker-container --bootstrap >/dev/null
+	docker buildx build --builder $(BUILDER) --platform $(PLATFORMS) \
 	    $(BUILDX_ATTEST_OFF) \
 	    --output $(MANIFEST_OUTPUT) \
 	    $(TAG_ARGS) .
 
-# One-time helper: create a multi-arch buildx builder. Safe to re-run.
-buildx_builder:
-	docker buildx create --name hvp-builder --driver docker-container --use --bootstrap 2>/dev/null || \
-	    docker buildx use hvp-builder
-
-.PHONY: all build build_no_cache push buildx_builder
+.PHONY: all build build_no_cache push
