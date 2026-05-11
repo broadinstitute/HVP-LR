@@ -5,6 +5,8 @@ __pycache__/
 .eggs/
 dist/
 build/
+venv/
+.venv/
 
 # IDE
 .idea/
