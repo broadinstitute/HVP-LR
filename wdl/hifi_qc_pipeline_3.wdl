@@ -752,9 +752,9 @@ workflow hifi_pipeline {
 
     input {
         File   input_tsv
-        File   kraken2_db_hash    = "gs://gcid-cil-shed-archive/kraken_db/k2_pluspf_20251015/hash.k2d"
-        File   kraken2_db_opts    = "gs://gcid-cil-shed-archive/kraken_db/k2_pluspf_20251015/opts.k2d"
-        File   kraken2_db_taxo    = "gs://gcid-cil-shed-archive/kraken_db/k2_pluspf_20251015/taxo.k2d"
+        File   kraken2_db_hash    = "gs://gcid-cil-shed-archive/kraken_db/k2_pluspf_20251015/hash.k2d"  # !FileCoercion
+        File   kraken2_db_opts    = "gs://gcid-cil-shed-archive/kraken_db/k2_pluspf_20251015/opts.k2d"  # !FileCoercion
+        File   kraken2_db_taxo    = "gs://gcid-cil-shed-archive/kraken_db/k2_pluspf_20251015/taxo.k2d"  # !FileCoercion
         Float  kraken2_confidence = 0.001
     }
 
@@ -781,7 +781,7 @@ workflow hifi_pipeline {
         # Convert BAM to FASTQ and compute accuracy/passes (single BAM download)
         call bam_to_fastq_and_stats {
             input:
-                input_bam = bam_path
+                input_bam = bam_path  # !FileCoercion
         }
 
         # Seqkit stats (depends on FASTQ)
