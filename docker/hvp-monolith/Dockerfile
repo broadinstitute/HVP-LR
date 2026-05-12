@@ -17,5 +17,8 @@ RUN python --version && \
     fastqc --version && \
     multiqc --version
 
+# PolyForm Shield 1.0.0 requires distributing the license with the software.
+COPY LICENSE /opt/hvp-lr/LICENSE
+
 # Set working directory
 WORKDIR /data

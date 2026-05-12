@@ -44,14 +44,20 @@ TAG_ARGS = $(foreach t,$(TARGETS),-t $(t))
 # Reminder: ORDER MATTERS HERE - PUT `all` first!
 all: build push
 
+# Stage the repo-root LICENSE into the build context so Dockerfile's
+# `COPY LICENSE` works. Regenerated whenever the root LICENSE changes.
+# Ignored by git (see root .gitignore).
+LICENSE: ../../LICENSE
+	cp ../../LICENSE LICENSE
+
 # Local single-arch build. Loads image into the local docker daemon as
 # $(IMAGE_NAME):$(VERSION) and :latest. Fast — no cross-arch QEMU.
-build:
+build: LICENSE
 	docker buildx build --load --platform linux/amd64 \
 	    $(BUILDX_ATTEST_OFF) \
 	    -t $(IMAGE_NAME):$(VERSION) -t $(IMAGE_NAME):latest .
 
-build_no_cache:
+build_no_cache: LICENSE
 	docker buildx build --no-cache --load --platform linux/amd64 \
 	    $(BUILDX_ATTEST_OFF) \
 	    -t $(IMAGE_NAME):$(VERSION) -t $(IMAGE_NAME):latest .
@@ -63,7 +69,7 @@ BUILDER = hvp-builder
 # Requires `docker login` to each registry in REPOS. The multi-arch builder is
 # created on demand if it doesn't already exist.
 # Does NOT depend on `build` — buildx builds and pushes in one shot from source.
-push:
+push: LICENSE
 	@docker buildx inspect $(BUILDER) >/dev/null 2>&1 || \
 	    docker buildx create --name $(BUILDER) --driver docker-container --bootstrap >/dev/null
 	docker buildx build --builder $(BUILDER) --platform $(PLATFORMS) \
@@ -71,4 +77,7 @@ push:
 	    --output $(MANIFEST_OUTPUT) \
 	    $(TAG_ARGS) .
 
-.PHONY: all build build_no_cache push
+clean:
+	rm -f LICENSE
+
+.PHONY: all build build_no_cache push clean

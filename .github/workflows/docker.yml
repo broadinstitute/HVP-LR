@@ -118,6 +118,9 @@ jobs:
         with:
           ref: ${{ needs.bump-versions.outputs.committed == 'true' && github.ref || github.sha }}
 
+      - name: Stage LICENSE into image build context
+        run: cp LICENSE docker/${{ matrix.image }}/LICENSE
+
       - name: Read VERSION from Makefile
         id: ver
         run: |
