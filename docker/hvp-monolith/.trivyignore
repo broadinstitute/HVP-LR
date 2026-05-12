@@ -1,0 +1,13 @@
+# Trivy ignore file — per-CVE exceptions with justifications
+#
+# This file documents individual CVE exceptions that cannot be addressed by
+# version bumps or by the Rego policy (.trivy-ignore-policy.rego). Each entry
+# MUST include a justification explaining why the CVE is accepted.
+#
+# Format: CVE-YYYY-NNNNN (one per line, # for comments)
+# See: https://aquasecurity.github.io/trivy/latest/docs/configuration/filtering/#by-finding-ids
+#
+# Review cadence: Re-evaluate all entries quarterly or when the affected
+# package is upgraded. Remove entries once the underlying package ships a fix.
+#
+# =============================================================================

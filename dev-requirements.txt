@@ -1,0 +1,2 @@
+miniwdl==1.14.2
+pre_commit==4.6.0

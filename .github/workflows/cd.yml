@@ -1,0 +1,147 @@
+name: CD — Cut release on main
+
+# Fires after the Docker workflow finishes on main. The docker workflow
+# handles per-image VERSION bumps and image publication; this workflow
+# bumps the repo-level VERSION, tags a release, and writes release notes
+# that include the published version of every docker image at this commit.
+#
+# Loop prevention:
+#   - The version-bump commit ends with [skip ci] so the docker workflow
+#     won't re-run on it; since this workflow is gated on the docker
+#     workflow running, it also can't re-fire from its own bump commit.
+
+on:
+  workflow_run:
+    workflows: ["Docker Build, Push, Scan"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  release:
+    # Skip if the upstream docker workflow failed (manual dispatch always runs).
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute current and next repo version
+        id: ver
+        run: |
+          if [ ! -f VERSION ]; then
+            echo "::error::repo-root VERSION file missing"
+            exit 1
+          fi
+          cur="$(tr -d '[:space:]' < VERSION)"
+          if ! [[ "$cur" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "::error::VERSION '$cur' is not X.Y.Z"
+            exit 1
+          fi
+          ma="${BASH_REMATCH[1]}"
+          mi="${BASH_REMATCH[2]}"
+          pa="${BASH_REMATCH[3]}"
+          new="${ma}.${mi}.$((pa + 1))"
+          tag="hvp-lr_v${new}"
+          {
+            echo "current=$cur"
+            echo "new=$new"
+            echo "tag=$tag"
+          } >> "$GITHUB_OUTPUT"
+          echo "Repo version: ${cur} -> ${new}; tag: ${tag}"
+
+      - name: Build release notes
+        run: |
+          set -euo pipefail
+          new="${{ steps.ver.outputs.new }}"
+
+          # Commit log since the most recent release tag (if any).
+          last_tag="$(git tag --list 'hvp-lr_v*' --sort=-v:refname | head -n1 || true)"
+          if [ -n "$last_tag" ]; then
+            commit_log="$(git log --pretty='format:- %s (%h)' "${last_tag}..HEAD" || true)"
+            since_line="Commits since \`${last_tag}\`:"
+          else
+            commit_log="$(git log --pretty='format:- %s (%h)' -n 50 || true)"
+            since_line="Last 50 commits (no prior release tag found):"
+          fi
+
+          # Per-image version snapshot. GHCR image path mirrors docker.yml.
+          owner_repo_lc="$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          images_md=""
+          for d in docker/*/; do
+            [ -f "${d}Dockerfile" ] || continue
+            [ -f "${d}Makefile" ]  || continue
+            img="$(basename "$d")"
+            v="$(awk -F'=' '/^[[:space:]]*VERSION[[:space:]]*=/ {gsub(/[[:space:]]/,"",$2); print $2; exit}' "${d}Makefile")"
+            [ -n "$v" ] || v="(unknown)"
+            images_md+="| \`${img}\` | ${v} | \`ghcr.io/${owner_repo_lc}/${img}:${v}\` |"$'\n'
+          done
+
+          {
+            echo "## HVP-LR ${new}"
+            echo
+            echo "_Released $(date -u +'%Y-%m-%d %H:%M UTC') from ${GITHUB_SHA::7}_"
+            echo
+            echo "### Changes"
+            echo
+            echo "${since_line}"
+            echo
+            if [ -n "$commit_log" ]; then
+              echo "$commit_log"
+            else
+              echo "_(no commits)_"
+            fi
+            echo
+            echo "### Docker images in this release"
+            echo
+            echo "| Image | Version | Pullable as |"
+            echo "|-------|---------|-------------|"
+            if [ -n "$images_md" ]; then
+              printf '%s' "$images_md"
+            else
+              echo "| _no images in this release_ |  |  |"
+            fi
+          } > release_notes.md
+
+          echo "----- Release notes preview -----"
+          cat release_notes.md
+
+      - name: Commit bumped VERSION (skip CI)
+        run: |
+          echo "${{ steps.ver.outputs.new }}" > VERSION
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add VERSION
+          git commit -m "chore(release): cut ${{ steps.ver.outputs.tag }} [skip ci]"
+          git push origin main
+
+      - name: Create and push annotated tag
+        run: |
+          git tag -a "${{ steps.ver.outputs.tag }}" \
+              -m "HVP-LR ${{ steps.ver.outputs.new }}"
+          git push origin "${{ steps.ver.outputs.tag }}"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: ${{ steps.ver.outputs.tag }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: false

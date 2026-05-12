@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: miniwdl-check
+        name: Validate WDL files
+        entry: miniwdl check --strict
+        language: python
+        additional_dependencies: [miniwdl]
+        files: '\.wdl$'
