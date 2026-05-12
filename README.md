@@ -11,3 +11,4 @@ pre-commit install
 ```
 
 Your first commit will take a bit longer to run.  This is normal.
+noop
