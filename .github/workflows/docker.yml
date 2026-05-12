@@ -108,6 +108,7 @@ jobs:
       contents: read
       packages: write
       security-events: write
+      actions: read
     strategy:
       fail-fast: false
       matrix:
@@ -299,6 +300,7 @@ jobs:
       contents: read
       packages: read
       security-events: write
+      actions: read
     strategy:
       fail-fast: false
       matrix:

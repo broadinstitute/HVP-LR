@@ -22,3 +22,5 @@ COPY LICENSE /opt/hvp-lr/LICENSE
 
 # Set working directory
 WORKDIR /data
+
+# noop
