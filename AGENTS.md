@@ -38,7 +38,7 @@ HVP-LR/
 ├── .pre-commit-config.yaml       # WDL validation hook
 ├── dev-requirements.txt          # Local dev tooling (miniwdl, pre-commit)
 ├── VERSION                       # Repo-level version bumped by cd.yml on each release
-├── LICENSE                       # PolyForm Shield 1.0.0 (bundled into every image)
+├── LICENSE                       # MIT License (bundled into every image)
 ├── README.md                     # Human-facing orientation
 ├── CONTRIBUTING.md               # Setup + PR workflow (humans + agents)
 ├── CLAUDE.md                     # Pointer for Claude sessions
@@ -248,6 +248,6 @@ If the issue is a *class* of CVEs (not a single ID), add a rule to the per-image
 
 - [README.md](README.md) — short human-facing orientation.
 - [CONTRIBUTING.md](CONTRIBUTING.md) — setup + PR workflow shared by humans and agents.
-- [LICENSE](LICENSE) — PolyForm Shield 1.0.0. Source-available, not OSI open source.
+- [LICENSE](LICENSE) — MIT License.
 - `.github/workflows/docker.yml` and `.github/workflows/cd.yml` — the source of truth for everything described above. If this file ever drifts from those workflows, the workflows win.
 - `scripts/ci-detect-changed-images.sh`, `scripts/ci-bump-image-versions.sh` — CI internals; do not invoke directly.

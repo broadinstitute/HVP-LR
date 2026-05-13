@@ -76,4 +76,4 @@ File issues at https://github.com/broadinstitute/HVP-LR/issues. For sensitive se
 
 ## License
 
-Contributions are accepted under [PolyForm Shield 1.0.0](LICENSE) (source-available, not OSI open source). The license file is bundled into every built container at `/opt/hvp-lr/LICENSE`.
+Contributions are accepted under the [MIT License](LICENSE). The license file is bundled into every built container at `/opt/hvp-lr/LICENSE`.
