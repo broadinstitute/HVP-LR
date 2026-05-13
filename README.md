@@ -15,7 +15,7 @@ HVP-LR/
 ├── .pre-commit-config.yaml       # WDL validation hook
 ├── dev-requirements.txt          # Local dev tooling
 ├── VERSION                       # Repo-level version
-├── LICENSE                       # PolyForm Shield 1.0.0
+├── LICENSE                       # MIT License
 ├── README.md                     # This file
 ├── CONTRIBUTING.md               # Setup + PR workflow
 ├── CLAUDE.md                     # Pointer for Claude sessions
@@ -49,6 +49,4 @@ Images are published to `ghcr.io/broadinstitute/hvp-lr/<image>:<version>` and (w
 
 ## License
 
-PolyForm Shield 1.0.0 — see [LICENSE](LICENSE). Source-available, not OSI open source. Any use is permitted except providing a product that competes with HVP-LR or with software the Broad Institute provides using HVP-LR. The LICENSE file is bundled into every built container at `/opt/hvp-lr/LICENSE`.
-
-If you intend to redistribute an image or its derivatives, propagate the LICENSE and any `Required Notice:` lines per the Shield "Notices" section.
+MIT — see [LICENSE](LICENSE). The LICENSE file is bundled into every built container at `/opt/hvp-lr/LICENSE`. If you redistribute the source or an image, MIT requires the copyright notice and license text to travel with it.

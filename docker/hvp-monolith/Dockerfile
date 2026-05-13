@@ -17,7 +17,8 @@ RUN python --version && \
     fastqc --version && \
     multiqc --version
 
-# PolyForm Shield 1.0.0 requires distributing the license with the software.
+# MIT requires the copyright notice + license text travel with copies of
+# the software. Bundle the repo-root LICENSE into the image.
 COPY LICENSE /opt/hvp-lr/LICENSE
 
 # Set working directory
