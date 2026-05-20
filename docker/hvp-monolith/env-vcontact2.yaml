@@ -1,0 +1,16 @@
+name: vcontact2
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  # Sidecar env for vConTACT2. Versions pinned to match the working
+  # external install at /cil/shed/apps/external/vcontact2 referenced
+  # in the original tpshea2 environment notes.
+  - python=3.8
+  - vcontact2=0.11.3
+  # vcontact2 0.11.3 uses `np.warnings.filterwarnings(...)` which numpy >=1.24
+  # removed. Pin numpy below 1.24 to keep the module importable.
+  - "numpy<1.24"
+  - diamond=2.1.24
+  - mcl
+  - clusterone

@@ -1,0 +1,17 @@
+name: deepvirfinder
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  # Sidecar env for DeepVirFinder. Tool is a git-cloned script (cloned at
+  # build time to /opt/deepvirfinder); conda only provides the runtime.
+  # Pinned to python=3.6 + theano=1.0.3 + keras=2.2.4 per upstream README.
+  # theano + keras are installed via pip after conda solve (they aren't
+  # cleanly available on conda-forge for python=3.6).
+  - python=3.6
+  - h5py
+  - numpy
+  - scipy
+  - biopython
+  - diamond
+  - pip

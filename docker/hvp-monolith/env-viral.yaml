@@ -1,0 +1,11 @@
+name: viral
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  # Sidecar env for tools that can't coexist with the base env's python>=3.12.
+  # virsorter (<=2.2.4) and vibrant both require python <=3.10.
+  # Exposed to PATH via wrapper scripts in /usr/local/bin (see Dockerfile).
+  - python=3.10
+  - virsorter>=2
+  - vibrant
