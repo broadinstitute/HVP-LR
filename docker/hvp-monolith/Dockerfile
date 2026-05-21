@@ -40,6 +40,14 @@ RUN micromamba create -y -n vcontact2 \
         -f /tmp/env-vcontact2.yaml && \
     micromamba clean --all --yes
 
+# Sidecar env (checkm2): tensorflow=2.17 (pip wheel — conda-forge ships no
+# linux-aarch64 build at that version) + checkm2 1.1.0 from source.
+COPY --chown=$MAMBA_USER:$MAMBA_USER env-checkm2.yaml /tmp/env-checkm2.yaml
+RUN micromamba create -y -n checkm2 \
+        --channel-priority strict \
+        -f /tmp/env-checkm2.yaml && \
+    micromamba clean --all --yes
+
 # DeepVirFinder source. Cloned to /opt/deepvirfinder; .git/ stripped because
 # the runtime doesn't need git history.
 USER root
@@ -63,6 +71,10 @@ RUN set -e; \
             > "/usr/local/bin/$tool"; \
         chmod +x "/usr/local/bin/$tool"; \
     done; \
+    # checkm2 env wrapper
+    printf '#!/bin/bash\nexec /opt/conda/envs/checkm2/bin/checkm2 "$@"\n' \
+        > /usr/local/bin/checkm2; \
+    chmod +x /usr/local/bin/checkm2; \
     # DeepVirFinder wrapper
     printf '#!/bin/bash\nexec micromamba run -n deepvirfinder python /opt/deepvirfinder/dvf.py "$@"\n' \
         > /usr/local/bin/dvf.py; \
@@ -115,6 +127,7 @@ RUN python --version && \
     virsorter --version && \
     VIBRANT_run.py -h >/dev/null && \
     which vcontact2 && \
+    checkm2 --version && \
     dvf.py -h >/dev/null && \
     test -f /opt/deepvirfinder/dvf.py
 
