@@ -125,6 +125,19 @@ jobs:
         with:
           ref: ${{ needs.bump-versions.outputs.committed == 'true' && github.ref || github.sha }}
 
+      # ubuntu-latest runners ship with ~14 GB free on /. Multi-env conda +
+      # DeepVirFinder model weights overflow that. Drop the preinstalled
+      # toolchains (Android SDK, .NET, Haskell, CodeQL, Swift) we never use —
+      # frees ~25 GB. Common pattern; see jlumbroso/free-disk-space.
+      - name: Free disk space on runner
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /usr/local/share/boost /opt/hostedtoolcache/CodeQL \
+                      /usr/local/lib/heroku /usr/local/share/powershell \
+                      /usr/local/share/chromium /usr/local/share/swift || true
+          sudo docker image prune -af || true
+          df -h /
+
       - name: Stage LICENSE into image build context
         run: cp LICENSE docker/${{ matrix.image }}/LICENSE
 
