@@ -1,4 +1,8 @@
 name: viral
+# All entries pinned to versions confirmed installed by a successful local
+# amd64 build. Build hashes intentionally omitted so the same spec resolves
+# on arm64. To re-pin after an intentional upgrade, run a local build and
+# `micromamba list -n viral`.
 channels:
   - conda-forge
   - bioconda
@@ -6,6 +10,6 @@ dependencies:
   # Sidecar env for tools that can't coexist with the base env's python>=3.12.
   # virsorter (<=2.2.4) and vibrant both require python <=3.10.
   # Exposed to PATH via wrapper scripts in /usr/local/bin (see Dockerfile).
-  - python=3.10
-  - virsorter>=2
-  - vibrant
+  - python=3.10.20
+  - virsorter=2.2.4
+  - vibrant=1.0.1

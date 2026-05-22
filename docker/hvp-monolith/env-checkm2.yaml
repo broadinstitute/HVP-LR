@@ -8,24 +8,29 @@ name: checkm2
 #
 # diamond/prodigal etc match the constraints declared by the bioconda
 # checkm2 1.1.0 (newer python>3.12 build) recipe so behavior matches.
+#
+# All entries pinned to versions confirmed installed by a successful local
+# amd64 build. Build hashes intentionally omitted so the same spec resolves
+# on arm64. To re-pin after an intentional upgrade, run a local build and
+# `micromamba list -n checkm2`.
 channels:
   - conda-forge
   - bioconda
 dependencies:
-  - python=3.10
-  - pip
+  - python=3.10.20
+  - pip=26.1.1
   - diamond=2.1.11
-  - prodigal
-  - lightgbm
-  - h5py
+  - prodigal=2.6.3
+  - lightgbm=4.6.0
+  - h5py=3.16.0
   - scikit-learn=1.6.1
-  - scipy
-  - numpy<2
-  - pandas
-  - packaging
-  - tqdm
-  - requests
-  - keras
+  - scipy=1.15.2
+  - numpy=1.26.4
+  - pandas=2.3.3
+  - packaging=26.2
+  - tqdm=4.67.3
+  - requests=2.34.2
+  - keras=3.12.0
   - pip:
       - tensorflow==2.17.0
       # tarball URL instead of git+https so the env doesn't need git installed.
