@@ -13,6 +13,22 @@ RUN micromamba install -y -n base \
         -f /tmp/env.yaml && \
     micromamba clean --all --yes
 
+# metamdbg (per-arch). bioconda ships metamdbg 1.4 on linux-64 only; the
+# latest linux-aarch64 build is 1.2. Pick the newest available per arch
+# rather than downgrading amd64 just to keep one yaml line.
+ARG TARGETARCH
+RUN set -e; \
+    case "$TARGETARCH" in \
+        amd64) METAMDBG_VER=1.4 ;; \
+        arm64) METAMDBG_VER=1.2 ;; \
+        *) echo "unsupported TARGETARCH=$TARGETARCH" >&2; exit 1 ;; \
+    esac; \
+    micromamba install -y -n base \
+        --channel-priority strict \
+        -c conda-forge -c bioconda \
+        "metamdbg=$METAMDBG_VER" && \
+    micromamba clean --all --yes
+
 # Sidecar env (viral): virsorter (>=2) + vibrant. Requires python<=3.10.
 COPY --chown=$MAMBA_USER:$MAMBA_USER env-viral.yaml /tmp/env-viral.yaml
 RUN micromamba create -y -n viral \
