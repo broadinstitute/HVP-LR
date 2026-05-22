@@ -49,6 +49,12 @@ CVE-2025-47273
 # CVE-2026-44431: urllib3 2.2.3 — fixed in 2.7.0; not py3.8-compatible.
 #   No untrusted-URL fetch in the pipeline. Quarterly review.
 CVE-2026-44431
+# CVE-2023-39631: numexpr 2.8.4 — RCE via evaluate() with untrusted input.
+#   Fixed in 2.8.5, but conda-forge has no py3.8 build of numexpr >= 2.8.5
+#   (2.8.5+ require py>=3.9). vcontact2 doesn't expose user-controlled
+#   strings to numexpr.evaluate; pandas pulls numexpr as an optional speed-up.
+#   Quarterly review.
+CVE-2023-39631
 #
 # -----------------------------------------------------------------------------
 # jaraco.context (vendored by setuptools)

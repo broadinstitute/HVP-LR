@@ -11,9 +11,6 @@ dependencies:
   # vcontact2 0.11.3 uses `np.warnings.filterwarnings(...)` which numpy >=1.24
   # removed. Pin numpy below 1.24 to keep the module importable.
   - "numpy<1.24"
-  # numexpr 2.8.4 carries CVE-2023-39631 (langchain RCE via evaluate);
-  # 2.8.5+ fixes it and still solves under py=3.8 + numpy<1.24.
-  - "numexpr>=2.8.5"
   - diamond=2.1.24
   - mcl
   - clusterone
