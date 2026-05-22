@@ -29,6 +29,22 @@ CVE-2024-3660
 # CVE-2025-12060: keras 2.2.4 — path traversal in model loading. Same scope
 #   as above; not reachable. Quarterly review.
 CVE-2025-12060
+#
+# -----------------------------------------------------------------------------
+# checkm2 env (python=3.10) — keras pulled in by tensorflow=2.17 wheel
+# -----------------------------------------------------------------------------
+# CVE-2026-1669: keras 3.12.0 — information disclosure via arbitrary file
+#   read in model loading. checkm2 1.1.0 hard-pins tensorflow=2.17 (PyPI
+#   wheel; conda-forge has no aarch64 build at that version), which in turn
+#   pulls keras 3.12.0 from conda-forge's py3.10 channel. Pinning
+#   `keras>=3.12.1` in env-checkm2.yaml risks TF/keras ABI mismatch and a
+#   checkm2 inference regression that would only surface on real data.
+#   Reachability: checkm2 loads its own bundled CheckM2 model (a fixed file
+#   shipped with the package), not user-supplied .h5/.keras files, so the
+#   arbitrary-file-read vector is not exercised in the pipeline.
+#   Quarterly review; remove once checkm2 publishes a build against a fixed
+#   tensorflow / keras pairing.
+CVE-2026-1669
 # CVE-2024-6345: setuptools <70.0.0 — RCE via package_index download
 #   functions. We never invoke setuptools at runtime (envs are baked at build
 #   time). Hits both 58.0.4 (DVF, py3.6 ceiling) and 75.3.0 (vcontact2, py3.8
