@@ -173,6 +173,13 @@ Both `.trivyignore` and `.trivy-ignore-policy.rego` paths are hardcoded in `dock
 
 Trivy runs twice per image: once as a build gate (table format, `exit-code: 1`), once as SARIF upload to `Security → Code scanning` under category `trivy-<image>`. The weekly cron rescans `:latest` of every image without rebuilding, surfacing newly published CVE data.
 
+**Scan profile is auto-chosen by image size.** `scripts/ci-trivy-profile.sh` inspects the loaded image's `.Size` and picks:
+
+- **Large image** (over `TRIVY_LARGE_IMAGE_BYTES`, default `2147483648` = 2 GiB) — `scanners: vuln`, `timeout: 20m`. Drops the secret scanner, which is too slow on multi-GB scientific containers (it walks every text-ish file and chokes on huge reference DBs / model weights / generated headers) and is intended for source repositories with API keys anyway.
+- **Small image** (≤ threshold) — `scanners: vuln,secret`, `timeout: 10m`. Full default scan; small helper images aren't downgraded.
+
+Override the threshold per repo via the `TRIVY_LARGE_IMAGE_BYTES` GitHub Actions repository variable.
+
 ## WDL validation
 
 The `miniwdl check --strict` pre-commit hook is the **only** WDL gate. There is no CI safety net. If a contributor commits without running pre-commit (`git commit -n`), broken WDLs land on `main`.
