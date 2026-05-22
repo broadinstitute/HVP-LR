@@ -335,6 +335,14 @@ jobs:
           image-ref: ${{ steps.refs.outputs.ghcr_image }}:${{ steps.ver.outputs.version }}
           format: table
           severity: CRITICAL,HIGH
+          # Vulnerability scanning only. Secret scanner is too slow on this
+          # image (~5 GB conda envs, multi-GB model weights and reference data
+          # files in vcontact2 / DeepVirFinder / tensorflow MLIR headers) and
+          # is intended for source repos with API keys, not scientific images.
+          scanners: vuln
+          # Default Trivy timeout is 5 min; raise so the layer walk on this
+          # large image completes (last run hit "context deadline exceeded").
+          timeout: 20m
           exit-code: '1'
           ignore-unfixed: true
           ignore-policy: docker/${{ matrix.image }}/.trivy-ignore-policy.rego
@@ -348,6 +356,14 @@ jobs:
           format: sarif
           output: trivy-${{ matrix.image }}.sarif
           severity: CRITICAL,HIGH
+          # Vulnerability scanning only. Secret scanner is too slow on this
+          # image (~5 GB conda envs, multi-GB model weights and reference data
+          # files in vcontact2 / DeepVirFinder / tensorflow MLIR headers) and
+          # is intended for source repos with API keys, not scientific images.
+          scanners: vuln
+          # Default Trivy timeout is 5 min; raise so the layer walk on this
+          # large image completes (last run hit "context deadline exceeded").
+          timeout: 20m
           limit-severities-for-sarif: true
           ignore-unfixed: true
           ignore-policy: docker/${{ matrix.image }}/.trivy-ignore-policy.rego
@@ -416,6 +432,14 @@ jobs:
           image-ref: ${{ matrix.image }}:scan
           format: table
           severity: CRITICAL,HIGH
+          # Vulnerability scanning only. Secret scanner is too slow on this
+          # image (~5 GB conda envs, multi-GB model weights and reference data
+          # files in vcontact2 / DeepVirFinder / tensorflow MLIR headers) and
+          # is intended for source repos with API keys, not scientific images.
+          scanners: vuln
+          # Default Trivy timeout is 5 min; raise so the layer walk on this
+          # large image completes (last run hit "context deadline exceeded").
+          timeout: 20m
           exit-code: '1'
           ignore-unfixed: true
           ignore-policy: docker/${{ matrix.image }}/.trivy-ignore-policy.rego
@@ -429,6 +453,14 @@ jobs:
           format: sarif
           output: trivy-${{ matrix.image }}.sarif
           severity: CRITICAL,HIGH
+          # Vulnerability scanning only. Secret scanner is too slow on this
+          # image (~5 GB conda envs, multi-GB model weights and reference data
+          # files in vcontact2 / DeepVirFinder / tensorflow MLIR headers) and
+          # is intended for source repos with API keys, not scientific images.
+          scanners: vuln
+          # Default Trivy timeout is 5 min; raise so the layer walk on this
+          # large image completes (last run hit "context deadline exceeded").
+          timeout: 20m
           limit-severities-for-sarif: true
           ignore-unfixed: true
           ignore-policy: docker/${{ matrix.image }}/.trivy-ignore-policy.rego
@@ -485,6 +517,14 @@ jobs:
           image-ref: ${{ steps.refs.outputs.ref }}
           format: table
           severity: CRITICAL,HIGH
+          # Vulnerability scanning only. Secret scanner is too slow on this
+          # image (~5 GB conda envs, multi-GB model weights and reference data
+          # files in vcontact2 / DeepVirFinder / tensorflow MLIR headers) and
+          # is intended for source repos with API keys, not scientific images.
+          scanners: vuln
+          # Default Trivy timeout is 5 min; raise so the layer walk on this
+          # large image completes (last run hit "context deadline exceeded").
+          timeout: 20m
           exit-code: '1'
           ignore-unfixed: true
           ignore-policy: docker/${{ matrix.image }}/.trivy-ignore-policy.rego
@@ -498,6 +538,14 @@ jobs:
           format: sarif
           output: trivy-${{ matrix.image }}.sarif
           severity: CRITICAL,HIGH
+          # Vulnerability scanning only. Secret scanner is too slow on this
+          # image (~5 GB conda envs, multi-GB model weights and reference data
+          # files in vcontact2 / DeepVirFinder / tensorflow MLIR headers) and
+          # is intended for source repos with API keys, not scientific images.
+          scanners: vuln
+          # Default Trivy timeout is 5 min; raise so the layer walk on this
+          # large image completes (last run hit "context deadline exceeded").
+          timeout: 20m
           limit-severities-for-sarif: true
           ignore-unfixed: true
           ignore-policy: docker/${{ matrix.image }}/.trivy-ignore-policy.rego
