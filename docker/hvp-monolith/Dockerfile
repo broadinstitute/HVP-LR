@@ -82,7 +82,10 @@ RUN set -e; \
 
 # Strip caches, byte-compiled modules, and docs from /opt/conda. Python will
 # regenerate __pycache__ at runtime for modules it imports; nothing here is
-# required at runtime.
+# required at runtime. The /opt/conda/pkgs/* extracted dirs hold a second copy
+# of every installed package (~9 GB) plus stale versions left behind by env
+# solves — those stale copies trip Trivy with CVEs against versions that are
+# not actually on $PATH in any env.
 RUN set -e; \
     find /opt/conda -type d -name __pycache__ -prune -exec rm -rf {} +; \
     find /opt/conda -type f -name '*.pyc' -delete; \
@@ -90,7 +93,7 @@ RUN set -e; \
     find /opt/conda -type d -path '*/share/man*' -prune -exec rm -rf {} +; \
     find /opt/conda -type d -path '*/share/doc/*' -prune -exec rm -rf {} +; \
     find /opt/conda -type d -path '*/share/info/*' -prune -exec rm -rf {} +; \
-    rm -rf /opt/conda/pkgs/cache 2>/dev/null || true; \
+    rm -rf /opt/conda/pkgs 2>/dev/null || true; \
     rm -rf /home/$MAMBA_USER/.mamba/pkgs 2>/dev/null || true; \
     true
 
