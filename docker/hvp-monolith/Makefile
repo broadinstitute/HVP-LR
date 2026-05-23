@@ -1,5 +1,5 @@
 IMAGE_NAME = hvp-monolith
-VERSION = 0.0.2
+VERSION = 0.0.3
 
 REPOS = \
 	us.gcr.io/broadinstitute \
