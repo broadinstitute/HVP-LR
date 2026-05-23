@@ -1,0 +1,37 @@
+name: checkm2
+# Sidecar env for checkm2 1.1.0.
+#
+# Why not in the base env? checkm2 1.1.0 hard-pins tensorflow=2.17, but
+# conda-forge only ships tensorflow aarch64 builds at 2.18/2.19 — solver
+# fails on arm64. PyPI does ship a tensorflow==2.17.0 aarch64 wheel,
+# so we install tensorflow + checkm2 via pip and keep the rest as conda.
+#
+# diamond/prodigal etc match the constraints declared by the bioconda
+# checkm2 1.1.0 (newer python>3.12 build) recipe so behavior matches.
+#
+# All entries pinned to versions confirmed installed by a successful local
+# amd64 build. Build hashes intentionally omitted so the same spec resolves
+# on arm64. To re-pin after an intentional upgrade, run a local build and
+# `micromamba list -n checkm2`.
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.10.20
+  - pip=26.1.1
+  - diamond=2.1.11
+  - prodigal=2.6.3
+  - lightgbm=4.6.0
+  - h5py=3.16.0
+  - scikit-learn=1.6.1
+  - scipy=1.15.2
+  - numpy=1.26.4
+  - pandas=2.3.3
+  - packaging=26.2
+  - tqdm=4.67.3
+  - requests=2.34.2
+  - keras=3.12.0
+  - pip:
+      - tensorflow==2.17.0
+      # tarball URL instead of git+https so the env doesn't need git installed.
+      - https://github.com/chklovski/CheckM2/archive/refs/tags/1.1.0.tar.gz

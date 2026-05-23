@@ -1,0 +1,20 @@
+name: vcontact2
+# All entries pinned to versions confirmed installed by a successful local
+# amd64 build. Build hashes intentionally omitted so the same spec resolves
+# on arm64. To re-pin after an intentional upgrade, run a local build and
+# `micromamba list -n vcontact2`.
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  # Sidecar env for vConTACT2. Versions pinned to match the working
+  # external install at /cil/shed/apps/external/vcontact2 referenced
+  # in the original tpshea2 environment notes.
+  - python=3.8.20
+  - vcontact2=0.11.3
+  # vcontact2 0.11.3 uses `np.warnings.filterwarnings(...)` which numpy >=1.24
+  # removed. 1.23.5 is the last numpy that keeps the module importable.
+  - numpy=1.23.5
+  - diamond=2.1.24
+  - mcl=22.282
+  - clusterone=1.0

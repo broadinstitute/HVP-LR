@@ -1,0 +1,23 @@
+name: deepvirfinder
+# All entries pinned to versions confirmed installed by a successful local
+# amd64 build. Build hashes intentionally omitted so the same spec resolves
+# on arm64. To re-pin after an intentional upgrade, run a local build and
+# `micromamba list -n deepvirfinder`.
+#
+# theano + keras are pip-installed AFTER the conda solve (pinned in
+# Dockerfile: theano==1.0.3 keras==2.2.4). They are not listed here because
+# py3.6 conda builds of those two are unreliable.
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  # Sidecar env for DeepVirFinder. Tool is a git-cloned script (cloned at
+  # build time to /opt/deepvirfinder); conda only provides the runtime.
+  # Pinned to python=3.6 + theano=1.0.3 + keras=2.2.4 per upstream README.
+  - python=3.6.15
+  - h5py=3.1.0
+  - numpy=1.19.5
+  - scipy=1.5.3
+  - biopython=1.79
+  - diamond=2.1.10
+  - pip=21.3.1

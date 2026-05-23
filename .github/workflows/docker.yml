@@ -36,6 +36,13 @@ env:
   # (checkout, login-action, metadata-action, etc.) that haven't bumped yet.
   # Remove this once Node 24 is the runner default.
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  # Image size (uncompressed, as reported by `docker image inspect .Size`)
+  # above which Trivy drops the secret scanner and uses an extended timeout.
+  # Big scientific images full of model weights and reference databases trip
+  # the secret scanner's per-file size guard; the secret scanner is meant for
+  # source repos with API keys anyway. Smaller images get the full default
+  # scan (vuln + secret). Override via repo variable TRIVY_LARGE_IMAGE_BYTES.
+  TRIVY_LARGE_IMAGE_BYTES: ${{ vars.TRIVY_LARGE_IMAGE_BYTES || '2147483648' }}
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -99,9 +106,13 @@ jobs:
           git push
 
   # ---------------------------------------------------------------------------
-  # 3) Build, push, and Trivy-scan each changed image in parallel.
+  # 3a) Build each image per-arch on a native runner and push an intermediate
+  #     per-arch tag to GHCR. amd64 runs on ubuntu-latest; arm64 runs on
+  #     ubuntu-24.04-arm (native arm runner — no QEMU emulation, ~5-10x faster
+  #     than cross-building arm64 under QEMU on an amd64 runner).
+  #     Skipped on PRs (PR path uses pr-build-scan below — single arch, no push).
   # ---------------------------------------------------------------------------
-  build-scan:
+  build-per-arch:
     needs: [detect-changes, bump-versions]
     if: >-
       always()
@@ -109,6 +120,94 @@ jobs:
       && needs.bump-versions.result != 'failure'
       && github.event_name != 'schedule'
       && github.event_name != 'workflow_dispatch'
+      && github.event_name != 'pull_request'
+    runs-on: ${{ matrix.arch.runner }}
+    permissions:
+      contents: read
+      packages: write
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(needs.detect-changes.outputs.images) }}
+        arch:
+          - { name: amd64, runner: ubuntu-latest,    platform: linux/amd64 }
+          - { name: arm64, runner: ubuntu-24.04-arm, platform: linux/arm64 }
+    steps:
+      - name: Checkout (pick up auto-bump if any)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.bump-versions.outputs.committed == 'true' && github.ref || github.sha }}
+
+      # Runners ship with ~14 GB free on /. Multi-env conda + DeepVirFinder
+      # model weights overflow that. Drop preinstalled toolchains we don't
+      # use — frees ~25 GB. (Same paths apply on both amd64 and arm64 runner
+      # images; missing paths are a no-op thanks to `|| true`.)
+      - name: Free disk space on runner
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /usr/local/share/boost /opt/hostedtoolcache/CodeQL \
+                      /usr/local/lib/heroku /usr/local/share/powershell \
+                      /usr/local/share/chromium /usr/local/share/swift || true
+          sudo docker image prune -af || true
+          df -h /
+
+      - name: Stage LICENSE into image build context
+        run: cp LICENSE docker/${{ matrix.image }}/LICENSE
+
+      - name: Read VERSION from Makefile
+        id: ver
+        run: |
+          v=$(awk -F'=' '/^[[:space:]]*VERSION[[:space:]]*=/ {gsub(/[[:space:]]/,"",$2); print $2; exit}' \
+              docker/${{ matrix.image }}/Makefile)
+          if [ -z "$v" ]; then
+            echo "::error::No VERSION in docker/${{ matrix.image }}/Makefile"
+            exit 1
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.GHCR_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute intermediate ref
+        id: refs
+        run: |
+          owner_repo_lc="$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          echo "intermediate=${{ env.GHCR_REGISTRY }}/${owner_repo_lc}/${{ matrix.image }}:${{ steps.ver.outputs.version }}-${{ matrix.arch.name }}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push intermediate per-arch tag
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/${{ matrix.image }}
+          platforms: ${{ matrix.arch.platform }}
+          tags: ${{ steps.refs.outputs.intermediate }}
+          # Cache scoped per image AND arch so amd64 and arm64 don't clobber
+          # each other in the GHA cache backend.
+          cache-from: type=gha,scope=${{ matrix.image }}-${{ matrix.arch.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}-${{ matrix.arch.name }}
+          # Force Docker v2.2 mediatypes on the per-arch manifests so the merge
+          # step in 3b produces a Docker manifest list (not an OCI index).
+          provenance: false
+          sbom: false
+          outputs: type=image,oci-mediatypes=false,push=true
+
+  # ---------------------------------------------------------------------------
+  # 3b) Merge per-arch intermediates into multi-arch final tags via
+  #     `docker buildx imagetools create`, push to GHCR (and GCR mirror if
+  #     configured), then Trivy-scan the merged image.
+  # ---------------------------------------------------------------------------
+  merge-and-scan:
+    needs: [detect-changes, bump-versions, build-per-arch]
+    if: >-
+      always()
+      && needs.build-per-arch.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -120,13 +219,10 @@ jobs:
       matrix:
         image: ${{ fromJSON(needs.detect-changes.outputs.images) }}
     steps:
-      - name: Checkout (pick up auto-bump if any)
+      - name: Checkout (for Trivy configs)
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.bump-versions.outputs.committed == 'true' && github.ref || github.sha }}
-
-      - name: Stage LICENSE into image build context
-        run: cp LICENSE docker/${{ matrix.image }}/LICENSE
 
       - name: Read VERSION from Makefile
         id: ver
@@ -150,14 +246,10 @@ jobs:
             echo "have=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Set up QEMU (for arm64 cross-build)
-        uses: docker/setup-qemu-action@v3
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.GHCR_REGISTRY }}
@@ -165,13 +257,13 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Authenticate to GCP
-        if: github.event_name != 'pull_request' && steps.gcr.outputs.have == 'true'
+        if: steps.gcr.outputs.have == 'true'
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
       - name: Log in to GCR
-        if: github.event_name != 'pull_request' && steps.gcr.outputs.have == 'true'
+        if: steps.gcr.outputs.have == 'true'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.GCR_REGISTRY }}
@@ -190,22 +282,22 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ steps.refs.outputs.ghcr_image }}
-          # Tag rules:
+          # Tag rules (same as the legacy single-job build-scan):
           #   - Immutable VERSION tag from the Makefile
           #   - Default branch push: bare branch name (e.g. `main`)
           #   - Non-default branch push: `branch-<name>` prefix
-          #   - PR: pr-<N>
           #   - Default branch only: also `latest`
+          # (PR rule omitted — PR runs go through pr-build-scan which never
+          # reaches this job.)
           tags: |
             type=raw,value=${{ steps.ver.outputs.version }}
             type=ref,event=branch,enable=${{ github.ref_name == github.event.repository.default_branch }}
             type=ref,event=branch,prefix=branch-,enable=${{ github.ref_name != github.event.repository.default_branch }}
-            type=ref,event=pr
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Metadata (GCR tags)
         id: meta_gcr
-        if: github.event_name != 'pull_request' && steps.gcr.outputs.have == 'true'
+        if: steps.gcr.outputs.have == 'true'
         uses: docker/metadata-action@v5
         with:
           images: ${{ steps.refs.outputs.gcr_image }}
@@ -213,67 +305,51 @@ jobs:
             type=raw,value=${{ steps.ver.outputs.version }}
             type=ref,event=branch,enable=${{ github.ref_name == github.event.repository.default_branch }}
             type=ref,event=branch,prefix=branch-,enable=${{ github.ref_name != github.event.repository.default_branch }}
-            type=ref,event=pr
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Combine tag lists
-        id: alltags
+      - name: Merge per-arch intermediates into multi-arch manifest list
+        env:
+          GHCR_TAGS:  ${{ steps.meta_ghcr.outputs.tags }}
+          GCR_TAGS:   ${{ steps.meta_gcr.outputs.tags }}
+          GHCR_IMAGE: ${{ steps.refs.outputs.ghcr_image }}
+          VERSION:    ${{ steps.ver.outputs.version }}
         run: |
-          {
-            echo "tags<<__EOF__"
-            echo "${{ steps.meta_ghcr.outputs.tags }}"
-            if [ -n "${{ steps.meta_gcr.outputs.tags }}" ]; then
-              echo "${{ steps.meta_gcr.outputs.tags }}"
-            fi
-            echo "__EOF__"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Build and push (multi-arch, Docker v2 manifest)
-        id: build
-        uses: docker/build-push-action@v6
-        with:
-          context: docker/${{ matrix.image }}
-          platforms: linux/amd64,linux/arm64
-          tags: ${{ steps.alltags.outputs.tags }}
-          labels: ${{ steps.meta_ghcr.outputs.labels }}
-          cache-from: type=gha,scope=${{ matrix.image }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
-          # Force Docker v2.2 manifest list (not OCI). provenance/sbom disabled
-          # because both attestations require OCI mediatypes.
-          provenance: false
-          sbom: false
-          outputs: type=image,oci-mediatypes=false,push=${{ github.event_name != 'pull_request' }}
-
-      - name: Build single-arch local image for PR scan
-        if: github.event_name == 'pull_request'
-        uses: docker/build-push-action@v6
-        with:
-          context: docker/${{ matrix.image }}
-          platforms: linux/amd64
-          push: false
-          load: true
-          tags: ${{ matrix.image }}:scan
-          cache-from: type=gha,scope=${{ matrix.image }}
-
-      - name: Determine scan image ref
-        id: scan_ref
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "ref=${{ matrix.image }}:scan" >> "$GITHUB_OUTPUT"
-          else
-            echo "ref=${{ steps.refs.outputs.ghcr_image }}:${{ steps.ver.outputs.version }}" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          tag_args=()
+          while IFS= read -r t; do
+            [ -n "$t" ] && tag_args+=("-t" "$t")
+          done <<< "$GHCR_TAGS"
+          if [ -n "${GCR_TAGS:-}" ]; then
+            while IFS= read -r t; do
+              [ -n "$t" ] && tag_args+=("-t" "$t")
+            done <<< "$GCR_TAGS"
           fi
+          # `imagetools create` preserves the source mediatype: since both
+          # per-arch sources were pushed with oci-mediatypes=false (Docker v2),
+          # the resulting manifest list is also Docker v2.2 — as required by
+          # downstream consumers that reject OCI mediatypes.
+          docker buildx imagetools create \
+            "${tag_args[@]}" \
+            "${GHCR_IMAGE}:${VERSION}-amd64" \
+            "${GHCR_IMAGE}:${VERSION}-arm64"
 
-      - name: Pull pushed image for scan
-        if: github.event_name != 'pull_request'
-        run: docker pull ${{ steps.scan_ref.outputs.ref }}
+      - name: Pull merged image for Trivy scan
+        run: docker pull ${{ steps.refs.outputs.ghcr_image }}:${{ steps.ver.outputs.version }}
+
+      - name: Pick Trivy scan profile by image size
+        id: trivy_cfg
+        env:
+          IMAGE_REF: ${{ steps.refs.outputs.ghcr_image }}:${{ steps.ver.outputs.version }}
+        run: bash scripts/ci-trivy-profile.sh
 
       - name: Trivy scan (table; fails build on HIGH/CRITICAL)
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ steps.scan_ref.outputs.ref }}
+          image-ref: ${{ steps.refs.outputs.ghcr_image }}:${{ steps.ver.outputs.version }}
           format: table
           severity: CRITICAL,HIGH
+          scanners: ${{ steps.trivy_cfg.outputs.scanners }}
+          timeout: ${{ steps.trivy_cfg.outputs.timeout }}
           exit-code: '1'
           ignore-unfixed: true
           ignore-policy: docker/${{ matrix.image }}/.trivy-ignore-policy.rego
@@ -283,17 +359,110 @@ jobs:
         if: always()
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ steps.scan_ref.outputs.ref }}
+          image-ref: ${{ steps.refs.outputs.ghcr_image }}:${{ steps.ver.outputs.version }}
           format: sarif
           output: trivy-${{ matrix.image }}.sarif
           severity: CRITICAL,HIGH
+          scanners: ${{ steps.trivy_cfg.outputs.scanners }}
+          timeout: ${{ steps.trivy_cfg.outputs.timeout }}
           limit-severities-for-sarif: true
           ignore-unfixed: true
           ignore-policy: docker/${{ matrix.image }}/.trivy-ignore-policy.rego
           trivyignores: docker/${{ matrix.image }}/.trivyignore
 
       - name: Upload Trivy SARIF
-        if: always() && github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-${{ matrix.image }}.sarif
+          category: trivy-${{ matrix.image }}
+
+  # ---------------------------------------------------------------------------
+  # 3c) PR builds: amd64-only, no push, Trivy-scan locally loaded image.
+  #     arm64 is intentionally skipped on PRs (multi-arch publish only happens
+  #     on push to main). Keeps PR feedback fast.
+  # ---------------------------------------------------------------------------
+  pr-build-scan:
+    needs: detect-changes
+    if: >-
+      needs.detect-changes.outputs.any == 'true'
+      && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(needs.detect-changes.outputs.images) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Free disk space on runner
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /usr/local/share/boost /opt/hostedtoolcache/CodeQL \
+                      /usr/local/lib/heroku /usr/local/share/powershell \
+                      /usr/local/share/chromium /usr/local/share/swift || true
+          sudo docker image prune -af || true
+          df -h /
+
+      - name: Stage LICENSE into image build context
+        run: cp LICENSE docker/${{ matrix.image }}/LICENSE
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build single-arch local image for PR scan
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/${{ matrix.image }}
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: ${{ matrix.image }}:scan
+          # Share cache with the amd64 leg of the on-push build for free
+          # warm-cache hits when the PR merges.
+          cache-from: type=gha,scope=${{ matrix.image }}-amd64
+
+      - name: Pick Trivy scan profile by image size
+        id: trivy_cfg
+        env:
+          IMAGE_REF: ${{ matrix.image }}:scan
+        run: bash scripts/ci-trivy-profile.sh
+
+      - name: Trivy scan (table; fails build on HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ matrix.image }}:scan
+          format: table
+          severity: CRITICAL,HIGH
+          scanners: ${{ steps.trivy_cfg.outputs.scanners }}
+          timeout: ${{ steps.trivy_cfg.outputs.timeout }}
+          exit-code: '1'
+          ignore-unfixed: true
+          ignore-policy: docker/${{ matrix.image }}/.trivy-ignore-policy.rego
+          trivyignores: docker/${{ matrix.image }}/.trivyignore
+
+      - name: Trivy scan (SARIF for Security tab)
+        if: always()
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ matrix.image }}:scan
+          format: sarif
+          output: trivy-${{ matrix.image }}.sarif
+          severity: CRITICAL,HIGH
+          scanners: ${{ steps.trivy_cfg.outputs.scanners }}
+          timeout: ${{ steps.trivy_cfg.outputs.timeout }}
+          limit-severities-for-sarif: true
+          ignore-unfixed: true
+          ignore-policy: docker/${{ matrix.image }}/.trivy-ignore-policy.rego
+          trivyignores: docker/${{ matrix.image }}/.trivyignore
+
+      - name: Upload Trivy SARIF
+        if: always() && github.event.pull_request.head.repo.full_name == github.repository
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-${{ matrix.image }}.sarif
@@ -337,12 +506,20 @@ jobs:
       - name: Pull latest
         run: docker pull ${{ steps.refs.outputs.ref }}
 
+      - name: Pick Trivy scan profile by image size
+        id: trivy_cfg
+        env:
+          IMAGE_REF: ${{ steps.refs.outputs.ref }}
+        run: bash scripts/ci-trivy-profile.sh
+
       - name: Trivy scan (table)
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ steps.refs.outputs.ref }}
           format: table
           severity: CRITICAL,HIGH
+          scanners: ${{ steps.trivy_cfg.outputs.scanners }}
+          timeout: ${{ steps.trivy_cfg.outputs.timeout }}
           exit-code: '1'
           ignore-unfixed: true
           ignore-policy: docker/${{ matrix.image }}/.trivy-ignore-policy.rego
@@ -356,6 +533,8 @@ jobs:
           format: sarif
           output: trivy-${{ matrix.image }}.sarif
           severity: CRITICAL,HIGH
+          scanners: ${{ steps.trivy_cfg.outputs.scanners }}
+          timeout: ${{ steps.trivy_cfg.outputs.timeout }}
           limit-severities-for-sarif: true
           ignore-unfixed: true
           ignore-policy: docker/${{ matrix.image }}/.trivy-ignore-policy.rego

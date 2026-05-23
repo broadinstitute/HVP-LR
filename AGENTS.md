@@ -52,7 +52,10 @@ Two workflows, chained:
 **`docker.yml` — Docker Build, Push, Scan**
 
 - Triggers: push to **any branch**, PR into `main`, weekly Monday 06:00 UTC cron, manual `workflow_dispatch`. Tag pushes are intentionally NOT a trigger (the release flow creates them; reacting would loop).
-- Jobs: `detect-changes` → `bump-versions` (default branch only) → `build-scan` (matrix per changed image) → `rescan-latest` (cron/dispatch only).
+- Jobs (push to a branch): `detect-changes` → `bump-versions` (default branch only) → `build-per-arch` (matrix `image × {amd64, arm64}`, each on its native runner — `ubuntu-latest` for amd64, `ubuntu-24.04-arm` for arm64) → `merge-and-scan` (matrix per image: `docker buildx imagetools create` stitches the per-arch intermediate tags into a multi-arch Docker v2 manifest list, then Trivy scans the merged tag).
+- Jobs (PR into `main`): `detect-changes` → `pr-build-scan` (amd64-only build + load + Trivy, no push). arm64 is intentionally skipped on PRs — the multi-arch build only runs after merge to `main`.
+- Jobs (cron/dispatch): `detect-changes` → `rescan-latest` (pulls and rescans `:latest` for each image, no build).
+- **Why native arm runners, not QEMU**: cross-building arm64 under QEMU on an amd64 runner was an order-of-magnitude slower (an HVP-monolith arm64 build alone ran close to the 6-hour job cap). `ubuntu-24.04-arm` runs the arm64 build natively. The trade-off is that each on-push build now publishes a transient `:VERSION-amd64` and `:VERSION-arm64` intermediate tag to GHCR alongside the final multi-arch tags. These intermediates point at the same per-arch digests the manifest list references — they're harmless but visible in the package UI.
 
 **`cd.yml` — CD: Cut release on main**
 
@@ -169,6 +172,13 @@ A vulnerability is suppressed if **any** of the three matches. They are additive
 Both `.trivyignore` and `.trivy-ignore-policy.rego` paths are hardcoded in `docker.yml`. **There is no fallback.** Adding an image without these two files makes the Trivy step fail.
 
 Trivy runs twice per image: once as a build gate (table format, `exit-code: 1`), once as SARIF upload to `Security → Code scanning` under category `trivy-<image>`. The weekly cron rescans `:latest` of every image without rebuilding, surfacing newly published CVE data.
+
+**Scan profile is auto-chosen by image size.** `scripts/ci-trivy-profile.sh` inspects the loaded image's `.Size` and picks:
+
+- **Large image** (over `TRIVY_LARGE_IMAGE_BYTES`, default `2147483648` = 2 GiB) — `scanners: vuln`, `timeout: 20m`. Drops the secret scanner, which is too slow on multi-GB scientific containers (it walks every text-ish file and chokes on huge reference DBs / model weights / generated headers) and is intended for source repositories with API keys anyway.
+- **Small image** (≤ threshold) — `scanners: vuln,secret`, `timeout: 10m`. Full default scan; small helper images aren't downgraded.
+
+Override the threshold per repo via the `TRIVY_LARGE_IMAGE_BYTES` GitHub Actions repository variable.
 
 ## WDL validation
 

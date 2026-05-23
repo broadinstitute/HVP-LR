@@ -11,3 +11,88 @@
 # package is upgraded. Remove entries once the underlying package ships a fix.
 #
 # =============================================================================
+#
+# -----------------------------------------------------------------------------
+# DeepVirFinder env (python=3.6) — upstream-locked
+# -----------------------------------------------------------------------------
+# DVF (jessieren/DeepVirFinder) ships no py>3.6 support and pins keras==2.2.4
+# + theano==1.0.3. Both are pip-installed in a sidecar env. setuptools at the
+# py3.6 ceiling is 58.0.4. None of these are reachable from a workflow caller:
+# DVF is invoked only via /usr/local/bin/dvf.py against user-supplied FASTA;
+# no untrusted model download, no PyPI install at runtime, no setuptools
+# package_index calls. Accepted until DVF is replaced (tracking).
+#
+# CVE-2024-3660: keras 2.2.4 — code injection via TF Keras model load. We
+#   never load third-party model files; only the DVF-bundled weights ship in
+#   the image. Quarterly review.
+CVE-2024-3660
+# CVE-2025-12060: keras 2.2.4 — path traversal in model loading. Same scope
+#   as above; not reachable. Quarterly review.
+CVE-2025-12060
+#
+# -----------------------------------------------------------------------------
+# checkm2 env (python=3.10) — keras pulled in by tensorflow=2.17 wheel
+# -----------------------------------------------------------------------------
+# CVE-2026-1669: keras 3.12.0 — information disclosure via arbitrary file
+#   read in model loading. checkm2 1.1.0 hard-pins tensorflow=2.17 (PyPI
+#   wheel; conda-forge has no aarch64 build at that version), which in turn
+#   pulls keras 3.12.0 from conda-forge's py3.10 channel. Pinning
+#   `keras>=3.12.1` in env-checkm2.yaml risks TF/keras ABI mismatch and a
+#   checkm2 inference regression that would only surface on real data.
+#   Reachability: checkm2 loads its own bundled CheckM2 model (a fixed file
+#   shipped with the package), not user-supplied .h5/.keras files, so the
+#   arbitrary-file-read vector is not exercised in the pipeline.
+#   Quarterly review; remove once checkm2 publishes a build against a fixed
+#   tensorflow / keras pairing.
+CVE-2026-1669
+# CVE-2024-6345: setuptools <70.0.0 — RCE via package_index download
+#   functions. We never invoke setuptools at runtime (envs are baked at build
+#   time). Hits both 58.0.4 (DVF, py3.6 ceiling) and 75.3.0 (vcontact2, py3.8
+#   ceiling). Quarterly review.
+CVE-2024-6345
+# CVE-2025-47273: setuptools <78.1.1 — path traversal in PackageIndex. Same
+#   non-reachability argument as CVE-2024-6345. Quarterly review.
+CVE-2025-47273
+#
+# -----------------------------------------------------------------------------
+# vcontact2 env (python=3.8) — upstream-locked
+# -----------------------------------------------------------------------------
+# vcontact2 0.11.3 requires python=3.8. urllib3 2.3+ requires python>=3.9, so
+# the py3.8 ceiling is urllib3 2.2.3. vcontact2 itself uses urllib3 only via
+# pandas's optional network features (we don't); the wrapper shim calls the
+# binary against local files. Accepted until vcontact2 ships py>=3.9 support.
+#
+# CVE-2026-44431: urllib3 2.2.3 — fixed in 2.7.0; not py3.8-compatible.
+#   No untrusted-URL fetch in the pipeline. Quarterly review.
+CVE-2026-44431
+# CVE-2023-39631: numexpr 2.8.4 — RCE via evaluate() with untrusted input.
+#   Fixed in 2.8.5, but conda-forge has no py3.8 build of numexpr >= 2.8.5
+#   (2.8.5+ require py>=3.9). vcontact2 doesn't expose user-controlled
+#   strings to numexpr.evaluate; pandas pulls numexpr as an optional speed-up.
+#   Quarterly review.
+CVE-2023-39631
+#
+# -----------------------------------------------------------------------------
+# jaraco.context (vendored by setuptools)
+# -----------------------------------------------------------------------------
+# CVE-2026-23949: jaraco.context 5.3.0 — path traversal via malicious tar.
+#   Vendored inside setuptools (setuptools._vendor.jaraco.context) in the
+#   py3.6 and py3.8 sidecar envs above. Same non-reachability argument as
+#   the setuptools CVEs. Removed automatically when those envs upgrade.
+CVE-2026-23949
+#
+# -----------------------------------------------------------------------------
+# Ruby (pulled in by das_tool=1.1.7)
+# -----------------------------------------------------------------------------
+# das_tool ships .rb scripts (scg_blank_diamond.rb, scg_blank_usearch.rb,
+# scg_blank_blast.rb) that bioconda's r44 ruby runtime executes. Dropping
+# Ruby breaks das_tool; bioconda has not rebuilt das_tool on a newer Ruby
+# stdlib gem set. Neither JSON parsing nor IMAP is invoked in the
+# das_tool execution paths we use.
+#
+# CVE-2026-33210: ruby/json 2.18.0 — DoS / info disclosure via format string.
+#   das_tool's .rb scripts don't parse untrusted JSON. Quarterly review.
+CVE-2026-33210
+# CVE-2026-42246: ruby/net-imap 0.6.2 — IMAP client vulnerability. das_tool
+#   does not open any network sockets, let alone IMAP. Quarterly review.
+CVE-2026-42246
