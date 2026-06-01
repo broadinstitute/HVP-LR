@@ -81,7 +81,7 @@ task ExampleTask {
         set -euxo pipefail
 
         # ---- Resource detection (required preamble) ----
-        NUM_CPUS=$(cat /proc/cpuinfo | grep '^processor' | tail -n1 | awk '{print $NF+1}')
+        NUM_CPUS=$(grep '^processor' /proc/cpuinfo | tail -n1 | awk '{print $NF+1}')
         RAM_IN_GB=$(free -g | grep "^Mem" | awk '{print $2}')
 
         # Reserve 1 GB for OS + container overhead.
@@ -386,7 +386,7 @@ Insert immediately after `set -euxo pipefail`:
 set -euxo pipefail
 
 # ---- Resource detection (required preamble) ----
-NUM_CPUS=$(cat /proc/cpuinfo | grep '^processor' | tail -n1 | awk '{print $NF+1}')
+NUM_CPUS=$(grep '^processor' /proc/cpuinfo | tail -n1 | awk '{print $NF+1}')
 RAM_IN_GB=$(free -g | grep "^Mem" | awk '{print $2}')
 
 # Reserve 1 GB for OS + container overhead.
