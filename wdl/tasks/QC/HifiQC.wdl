@@ -279,9 +279,6 @@ task HifiReadStats {
             max_read_length:          "Maximum read length",
             pct_q20_bases:            "Percentage of bases at Q20 or higher",
             pct_q30_bases:            "Percentage of bases at Q30 or higher",
-            mean_read_base_qual:      "Mean per-read Phred quality score derived from rq:f tags",
-            mean_read_accuracy:       "Mean per-read accuracy (as a percentage) derived from rq:f tags",
-            mean_num_passes:          "Mean number of CCS subreads per read (from np:i tags)",
             mean_read_gc:             "Mean GC content (percentage) across reads",
             pct_bacteria:             "Percentage of reads classified as Bacteria by kraken2",
             pct_fungi:                "Percentage of reads classified as Fungi by kraken2",
@@ -297,7 +294,6 @@ task HifiReadStats {
 
     parameter_meta {
         sample_name:               "Sample name used as output prefix (e.g. bc2019)"
-        bam_stats_tsv:             "Output from BamToFastqAndStats task"
         seqkit_stats_tsv:          "Output from HifiSeqkitStats task (stats)"
         seqkit_fx2tab_tsv:         "Output from HifiSeqkitStats task (fx2tab)"
         kraken2_stats_tsv:         "Output from HifiKraken2 task"
@@ -308,7 +304,6 @@ task HifiReadStats {
 
     input {
         String sample_name
-        File   bam_stats_tsv
         File   seqkit_stats_tsv
         File   seqkit_fx2tab_tsv
         File   kraken2_stats_tsv
@@ -319,7 +314,7 @@ task HifiReadStats {
         RuntimeAttr? runtime_attr_override
     }
 
-    Int disk_size = 10 + ceil(5.0 * (size(bam_stats_tsv, "GB") + size(seqkit_stats_tsv, "GB") + size(seqkit_fx2tab_tsv, "GB") + size(kraken2_stats_tsv, "GB") + size(taxid_and_genome_size_tsv, "GB")))
+    Int disk_size = 10 + ceil(5.0 * (size(seqkit_stats_tsv, "GB") + size(seqkit_fx2tab_tsv, "GB") + size(kraken2_stats_tsv, "GB") + size(taxid_and_genome_size_tsv, "GB")))
 
     command <<<
         set -euxo pipefail
@@ -339,7 +334,7 @@ task HifiReadStats {
         echo "NUM_CPUS=${NUM_CPUS}  RAM_IN_GB=${RAM_IN_GB}  USABLE_RAM_GB=${USABLE_RAM_GB}  MEM_PER_THREAD_GB=${MEM_PER_THREAD_GB}  JAVA_MEM_GB=${JAVA_MEM_GB}"
         # ---- end preamble ----
 
-        paste ~{extra_args} ~{seqkit_stats_tsv} ~{seqkit_fx2tab_tsv} ~{bam_stats_tsv} ~{kraken2_stats_tsv} ~{taxid_and_genome_size_tsv} | awk -v id="~{sample_name}" '
+        paste ~{extra_args} ~{seqkit_stats_tsv} ~{seqkit_fx2tab_tsv} ~{kraken2_stats_tsv} ~{taxid_and_genome_size_tsv} | awk -v id="~{sample_name}" '
         BEGIN {
             FS = "\t"
             OFS = "\t"
@@ -359,9 +354,6 @@ task HifiReadStats {
                 if ($i == "GC(%)") gc_col = i
                 if ($i == "bases_in_reads_over_10kb") bases_10kb_col = i
                 if ($i == "bases_in_reads_over_20kb") bases_20kb_col = i
-                if ($i == "mean_read_accuracy") read_accuracy_col = i
-                if ($i == "mean_qual_score") qual_score_col = i
-                if ($i == "mean_passes") passes_col = i
                 if ($i == "pct_bacteria") pct_bacteria_col = i
                 if ($i == "pct_virus") pct_virus_col = i
                 if ($i == "pct_fungi") pct_fungi_col = i
@@ -391,9 +383,6 @@ task HifiReadStats {
             avg_gc = sprintf("%.1f", $(gc_col))
             bases_in_reads_over_10kb = $(bases_10kb_col)
             bases_in_reads_over_20kb = $(bases_20kb_col)
-            mean_read_accuracy = $(read_accuracy_col)
-            mean_qual_score = $(qual_score_col)
-            mean_passes = $(passes_col)
             tax_id = $(tax_id_col)
             expected_genome_size = $(expected_genome_size_col)
             genus = $(genus_col)
@@ -440,9 +429,6 @@ task HifiReadStats {
             print "max_read_length:", max_len >> out_txt
             print "pct_q20_bases:", q20_pct >> out_txt
             print "pct_q30_bases:", q30_pct >> out_txt
-            print "mean_read_base_qual:", mean_qual_score >> out_txt
-            print "mean_read_accuracy:", mean_read_accuracy >> out_txt
-            print "mean_num_passes:", mean_passes >> out_txt
             print "mean_read_gc:", avg_gc >> out_txt
             print "pct_bacteria:", pct_bacteria >> out_txt
             print "pct_fungi:", pct_fungi >> out_txt
@@ -461,8 +447,7 @@ task HifiReadStats {
                   "bases_in_reads_over_20kb", "estimate_cvg_reads_20kb", \
                   "q1_read_length", "median_read_length", "q3_read_length", \
                   "n50_read_length", "max_read_length", \
-                  "pct_q20_bases", "pct_q30_bases", "mean_read_base_qual", \
-                  "mean_read_accuracy", "mean_num_passes", "mean_read_gc", \
+                  "pct_q20_bases", "pct_q30_bases", "mean_read_gc", \
                   "pct_bacteria", "pct_fungi", "pct_virus", "pct_human", "pct_unclassified", \
                   "top_genus", "pct_top_genus", "top_species", "pct_top_species" > out_tsv
 
@@ -471,8 +456,7 @@ task HifiReadStats {
                   bases_in_reads_over_10kb, est_cvg_10kb, \
                   bases_in_reads_over_20kb, est_cvg_20kb, \
                   q1, median_len, q3, n50, max_len, \
-                  q20_pct, q30_pct, mean_qual_score, \
-                  mean_read_accuracy, mean_passes, avg_gc, \
+                  q20_pct, q30_pct, avg_gc, \
                   pct_bacteria, pct_fungi, pct_virus, pct_human, pct_unclassified, \
                   top_genus, pct_top_genus, top_species, pct_top_species >> out_tsv
 
@@ -504,9 +488,6 @@ task HifiReadStats {
             print bar >> out_report
             printf fmt, "pct_q20_bases", q20_pct >> out_report
             printf fmt, "pct_q30_bases", q30_pct >> out_report
-            printf fmt, "mean_read_base_qual", mean_qual_score >> out_report
-            printf fmt, "mean_read_accuracy", mean_read_accuracy >> out_report
-            printf fmt, "mean_num_passes", mean_passes >> out_report
             printf fmt, "mean_read_gc", avg_gc >> out_report
             print bar >> out_report
             printf fmt, "pct_bacteria", pct_bacteria >> out_report
@@ -549,9 +530,6 @@ task HifiReadStats {
         Int    max_read_length          = read_int("stat.max_read_length.txt")
         Float  pct_q20_bases            = read_float("stat.pct_q20_bases.txt")
         Float  pct_q30_bases            = read_float("stat.pct_q30_bases.txt")
-        Float  mean_read_base_qual      = read_float("stat.mean_read_base_qual.txt")
-        Float  mean_read_accuracy       = read_float("stat.mean_read_accuracy.txt")
-        Int    mean_num_passes          = read_int("stat.mean_num_passes.txt")
         Float  mean_read_gc             = read_float("stat.mean_read_gc.txt")
         Float  pct_bacteria             = read_float("stat.pct_bacteria.txt")
         Float  pct_fungi                = read_float("stat.pct_fungi.txt")

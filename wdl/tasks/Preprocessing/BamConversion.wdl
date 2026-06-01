@@ -14,7 +14,6 @@ task BamToFastqAndStats {
 
         outputs: {
             fastq_gz:           "Compressed FASTQ produced by samtools fastq",
-            bam_stats_tsv:      "Two-row TSV with header (mean_read_accuracy, mean_qual_score, mean_passes) and one data row",
             mean_read_accuracy: "Mean read accuracy from rq:f tags, as a percentage (e.g. 99.876)",
             mean_qual_score:    "Mean Phred quality score derived from mean_read_accuracy",
             mean_passes:        "Mean number of CCS subreads per read from np:i tags, rounded down"
@@ -104,7 +103,6 @@ task BamToFastqAndStats {
 
     output {
         File   fastq_gz           = "~{bam_basename}.fastq.gz"
-        File   bam_stats_tsv      = "~{bam_basename}.bam_stats.tsv"
         Float  mean_read_accuracy = read_float("mean_read_accuracy.txt")
         Float  mean_qual_score    = read_float("mean_qual_score.txt")
         Int    mean_passes        = read_int("mean_passes.txt")

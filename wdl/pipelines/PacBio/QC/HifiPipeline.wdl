@@ -31,9 +31,9 @@ workflow HifiPipeline {
             max_read_length:          "Maximum read length",
             pct_q20_bases:            "Percentage of bases at Q20 or higher",
             pct_q30_bases:            "Percentage of bases at Q30 or higher",
-            mean_read_base_qual:      "Mean per-read Phred quality score",
-            mean_read_accuracy:       "Mean per-read accuracy (percentage)",
-            mean_num_passes:          "Mean number of CCS subreads per read",
+            mean_read_accuracy:       "Mean per-read accuracy (percentage) from rq:f tags",
+            mean_qual_score:          "Mean per-read Phred quality score derived from mean_read_accuracy",
+            mean_passes:              "Mean number of CCS subreads per read from np:i tags",
             mean_read_gc:             "Mean GC content (percentage) across reads",
             pct_bacteria:             "Percentage of reads classified as Bacteria",
             pct_fungi:                "Percentage of reads classified as Fungi",
@@ -98,7 +98,6 @@ workflow HifiPipeline {
     call QC.HifiReadStats as t_05_HifiReadStats {
         input:
             sample_name               = sample_name,
-            bam_stats_tsv             = t_02_BamToFastqAndStats.bam_stats_tsv,
             seqkit_stats_tsv          = t_03_HifiSeqkitStats.seqkit_stats_tsv,
             seqkit_fx2tab_tsv         = t_03_HifiSeqkitStats.seqkit_fx2tab_tsv,
             kraken2_stats_tsv         = t_04_HifiKraken2.kraken2_stats,
@@ -127,9 +126,9 @@ workflow HifiPipeline {
         Int    max_read_length          = t_05_HifiReadStats.max_read_length
         Float  pct_q20_bases            = t_05_HifiReadStats.pct_q20_bases
         Float  pct_q30_bases            = t_05_HifiReadStats.pct_q30_bases
-        Float  mean_read_base_qual      = t_05_HifiReadStats.mean_read_base_qual
-        Float  mean_read_accuracy       = t_05_HifiReadStats.mean_read_accuracy
-        Int    mean_num_passes          = t_05_HifiReadStats.mean_num_passes
+        Float  mean_read_accuracy       = t_02_BamToFastqAndStats.mean_read_accuracy
+        Float  mean_qual_score          = t_02_BamToFastqAndStats.mean_qual_score
+        Int    mean_passes              = t_02_BamToFastqAndStats.mean_passes
         Float  mean_read_gc             = t_05_HifiReadStats.mean_read_gc
         Float  pct_bacteria             = t_05_HifiReadStats.pct_bacteria
         Float  pct_fungi                = t_05_HifiReadStats.pct_fungi
