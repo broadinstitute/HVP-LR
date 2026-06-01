@@ -7,25 +7,50 @@ import "../../../tasks/QC/HifiQC.wdl" as QC
 workflow HifiPipeline {
 
     meta {
-        description: "Single-sample PacBio HiFi read QC pipeline. Takes one BAM plus genus/species/sample_name, performs taxonomy lookup, converts BAM to FASTQ, computes seqkit and kraken2 stats, and aggregates per-sample metrics into TSV/TXT/report files."
+        description: "Single-sample PacBio HiFi read QC pipeline. Takes one BAM plus genus/species/sample_name, performs taxonomy lookup, converts BAM to FASTQ, computes seqkit and kraken2 stats, and aggregates per-sample metrics. Returns each metric as an individual scalar plus a human-readable report, the FASTQ, and the raw kraken2 report."
 
         allowNestedInputs: true
 
         outputs: {
-            sample_stats_tsv:     "Per-sample summary stats TSV",
-            sample_stats_txt:     "Per-sample summary stats in plain-text key:value form",
-            sample_stats_report:  "Per-sample human-readable formatted report",
-            sample_fastq:         "Gzipped FASTQ produced from the input BAM",
-            sample_kraken_report: "Raw kraken2 report",
-            sample_taxid_tsv:     "One-row TSV with tax_id, expected_genome_size, genus, species",
-            sample_bam_stats:     "Mean read accuracy, Phred quality score, and CCS pass count parsed from BAM tags"
+            sample_fastq:             "Gzipped FASTQ produced from the input BAM",
+            sample_kraken_report:     "Raw kraken2 report",
+            sample_stats_report:      "Per-sample human-readable formatted report",
+            tax_id:                   "NCBI taxonomy ID resolved from (genus, species)",
+            expected_genome_size:     "Expected genome size in bases from the NCBI species_genome_size table; 'NA' if no entry",
+            num_reads:                "Total number of HiFi reads",
+            bases_in_reads:           "Total bases across all reads",
+            estimate_cvg:             "Estimated coverage = bases_in_reads / expected_genome_size; '-' if expected_genome_size is not available",
+            bases_in_reads_over_10kb: "Sum of read lengths for reads longer than 10kb",
+            estimate_cvg_reads_10kb:  "Estimated coverage from reads >10kb; '-' if expected_genome_size is not available",
+            bases_in_reads_over_20kb: "Sum of read lengths for reads longer than 20kb",
+            estimate_cvg_reads_20kb:  "Estimated coverage from reads >20kb; '-' if expected_genome_size is not available",
+            q1_read_length:           "Q1 of read length distribution",
+            median_read_length:       "Median read length",
+            q3_read_length:           "Q3 of read length distribution",
+            n50_read_length:          "N50 read length",
+            max_read_length:          "Maximum read length",
+            pct_q20_bases:            "Percentage of bases at Q20 or higher",
+            pct_q30_bases:            "Percentage of bases at Q30 or higher",
+            mean_read_base_qual:      "Mean per-read Phred quality score",
+            mean_read_accuracy:       "Mean per-read accuracy (percentage)",
+            mean_num_passes:          "Mean number of CCS subreads per read",
+            mean_read_gc:             "Mean GC content (percentage) across reads",
+            pct_bacteria:             "Percentage of reads classified as Bacteria",
+            pct_fungi:                "Percentage of reads classified as Fungi",
+            pct_virus:                "Percentage of reads classified as Viruses",
+            pct_human:                "Percentage of reads classified as Homo sapiens",
+            pct_unclassified:         "Percentage of reads left unclassified",
+            top_genus:                "Genus with the highest kraken2 classification percentage",
+            pct_top_genus:            "Percentage of reads assigned to top_genus",
+            top_species:              "Species with the highest kraken2 classification percentage",
+            pct_top_species:          "Percentage of reads assigned to top_species"
         }
     }
 
     parameter_meta {
         input_bam:          "PacBio HiFi reads BAM file for the sample"
         sample_name:        "Sample identifier used as the output prefix for per-sample artifacts (e.g. bc2019)"
-        genus:              "Genus name. Empty string allowed for metagenomic samples (but disables taxonomy/coverage estimation)."
+        genus:              "Genus name. Empty string allowed for metagenomic samples (disables taxonomy/coverage estimation)."
         species:            "Species name. Empty string allowed for metagenomic samples."
         kraken2_db_hash:    "Kraken2 database hash.k2d file (pre-extracted)"
         kraken2_db_opts:    "Kraken2 database opts.k2d file (pre-extracted)"
@@ -81,12 +106,39 @@ workflow HifiPipeline {
     }
 
     output {
-        File sample_stats_tsv     = t_05_HifiReadStats.hifi_read_stats_tsv
-        File sample_stats_txt     = t_05_HifiReadStats.hifi_read_stats_txt
-        File sample_stats_report  = t_05_HifiReadStats.hifi_read_stats_report
-        File sample_fastq         = t_02_BamToFastqAndStats.fastq_gz
-        File sample_kraken_report = t_04_HifiKraken2.kraken_report
-        File sample_taxid_tsv     = t_01_GetTaxIdAndGenomeSize.taxid_and_genome_size_tsv
-        File sample_bam_stats     = t_02_BamToFastqAndStats.bam_stats_tsv
+        File   sample_fastq             = t_02_BamToFastqAndStats.fastq_gz
+        File   sample_kraken_report     = t_04_HifiKraken2.kraken_report
+        File   sample_stats_report      = t_05_HifiReadStats.hifi_read_stats_report
+
+        Int    tax_id                   = t_01_GetTaxIdAndGenomeSize.tax_id
+        String expected_genome_size     = t_01_GetTaxIdAndGenomeSize.expected_genome_size
+
+        Int    num_reads                = t_05_HifiReadStats.num_reads
+        Int    bases_in_reads           = t_05_HifiReadStats.bases_in_reads
+        String estimate_cvg             = t_05_HifiReadStats.estimate_cvg
+        Int    bases_in_reads_over_10kb = t_05_HifiReadStats.bases_in_reads_over_10kb
+        String estimate_cvg_reads_10kb  = t_05_HifiReadStats.estimate_cvg_reads_10kb
+        Int    bases_in_reads_over_20kb = t_05_HifiReadStats.bases_in_reads_over_20kb
+        String estimate_cvg_reads_20kb  = t_05_HifiReadStats.estimate_cvg_reads_20kb
+        Int    q1_read_length           = t_05_HifiReadStats.q1_read_length
+        Int    median_read_length       = t_05_HifiReadStats.median_read_length
+        Int    q3_read_length           = t_05_HifiReadStats.q3_read_length
+        Int    n50_read_length          = t_05_HifiReadStats.n50_read_length
+        Int    max_read_length          = t_05_HifiReadStats.max_read_length
+        Float  pct_q20_bases            = t_05_HifiReadStats.pct_q20_bases
+        Float  pct_q30_bases            = t_05_HifiReadStats.pct_q30_bases
+        Float  mean_read_base_qual      = t_05_HifiReadStats.mean_read_base_qual
+        Float  mean_read_accuracy       = t_05_HifiReadStats.mean_read_accuracy
+        Int    mean_num_passes          = t_05_HifiReadStats.mean_num_passes
+        Float  mean_read_gc             = t_05_HifiReadStats.mean_read_gc
+        Float  pct_bacteria             = t_05_HifiReadStats.pct_bacteria
+        Float  pct_fungi                = t_05_HifiReadStats.pct_fungi
+        Float  pct_virus                = t_05_HifiReadStats.pct_virus
+        Float  pct_human                = t_05_HifiReadStats.pct_human
+        Float  pct_unclassified         = t_05_HifiReadStats.pct_unclassified
+        String top_genus                = t_05_HifiReadStats.top_genus
+        Float  pct_top_genus            = t_05_HifiReadStats.pct_top_genus
+        String top_species              = t_05_HifiReadStats.top_species
+        Float  pct_top_species          = t_05_HifiReadStats.pct_top_species
     }
 }

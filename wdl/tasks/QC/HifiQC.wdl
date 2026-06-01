@@ -261,12 +261,37 @@ task HifiKraken2 {
 task HifiReadStats {
 
     meta {
-        description: "Compile per-sample summary metrics from the bam, seqkit, kraken2, and taxonomy outputs into a single TSV plus a TXT and a human-readable formatted report."
+        description: "Compile per-sample summary metrics from the bam, seqkit, kraken2, and taxonomy outputs into a human-readable formatted report plus individual scalar outputs for each metric."
 
         outputs: {
-            hifi_read_stats_tsv:    "Single-row TSV with all collected per-sample metrics",
-            hifi_read_stats_txt:    "Key-value TXT report listing each metric on its own line",
-            hifi_read_stats_report: "Formatted ASCII-table report grouped by metric category"
+            hifi_read_stats_report:   "Formatted ASCII-table report grouped by metric category",
+            num_reads:                "Total number of HiFi reads (from seqkit num_seqs)",
+            bases_in_reads:           "Total bases across all reads (from seqkit sum_len)",
+            estimate_cvg:             "Estimated coverage = bases_in_reads / expected_genome_size; '-' if expected_genome_size is not available",
+            bases_in_reads_over_10kb: "Sum of read lengths for reads longer than 10kb",
+            estimate_cvg_reads_10kb:  "Estimated coverage from reads >10kb; '-' if expected_genome_size is not available",
+            bases_in_reads_over_20kb: "Sum of read lengths for reads longer than 20kb",
+            estimate_cvg_reads_20kb:  "Estimated coverage from reads >20kb; '-' if expected_genome_size is not available",
+            q1_read_length:           "Q1 (25th percentile) of read length distribution",
+            median_read_length:       "Median (Q2) read length",
+            q3_read_length:           "Q3 (75th percentile) of read length distribution",
+            n50_read_length:          "N50 read length",
+            max_read_length:          "Maximum read length",
+            pct_q20_bases:            "Percentage of bases at Q20 or higher",
+            pct_q30_bases:            "Percentage of bases at Q30 or higher",
+            mean_read_base_qual:      "Mean per-read Phred quality score derived from rq:f tags",
+            mean_read_accuracy:       "Mean per-read accuracy (as a percentage) derived from rq:f tags",
+            mean_num_passes:          "Mean number of CCS subreads per read (from np:i tags)",
+            mean_read_gc:             "Mean GC content (percentage) across reads",
+            pct_bacteria:             "Percentage of reads classified as Bacteria by kraken2",
+            pct_fungi:                "Percentage of reads classified as Fungi by kraken2",
+            pct_virus:                "Percentage of reads classified as Viruses by kraken2",
+            pct_human:                "Percentage of reads classified as Homo sapiens by kraken2",
+            pct_unclassified:         "Percentage of reads left unclassified by kraken2",
+            top_genus:                "Genus with the highest kraken2 classification percentage",
+            pct_top_genus:            "Percentage of reads assigned to top_genus",
+            top_species:              "Species with the highest kraken2 classification percentage",
+            pct_top_species:          "Percentage of reads assigned to top_species"
         }
     }
 
@@ -276,7 +301,7 @@ task HifiReadStats {
         seqkit_stats_tsv:          "Output from HifiSeqkitStats task (stats)"
         seqkit_fx2tab_tsv:         "Output from HifiSeqkitStats task (fx2tab)"
         kraken2_stats_tsv:         "Output from HifiKraken2 task"
-        taxid_and_genome_size_tsv: "Output from BatchGetTaxIdAndGenomeSize task"
+        taxid_and_genome_size_tsv: "Output from GetTaxIdAndGenomeSize task"
         extra_args:                "Additional command-line args appended verbatim to the paste invocation"
         runtime_attr_override:     "Override the default runtime attributes"
     }
@@ -495,12 +520,48 @@ task HifiReadStats {
             printf fmt, "pct_top_species", pct_top_species >> out_report
             print bar >> out_report
         }'
+
+        # Split the single-row TSV into per-column scalar files for WDL output bindings.
+        tsv="~{sample_name}.hifi_read_stats.tsv"
+        header=$(head -1 "$tsv")
+        data=$(tail -1 "$tsv")
+        IFS=$'\t' read -ra H <<< "$header"
+        IFS=$'\t' read -ra D <<< "$data"
+        for i in "${!H[@]}"; do
+            printf '%s\n' "${D[$i]}" > "stat.${H[$i]}.txt"
+        done
     >>>
 
     output {
-        File hifi_read_stats_tsv    = "~{sample_name}.hifi_read_stats.tsv"
-        File hifi_read_stats_txt    = "~{sample_name}.hifi_read_stats.txt"
-        File hifi_read_stats_report = "~{sample_name}.hifi_read_stats.report.txt"
+        File   hifi_read_stats_report   = "~{sample_name}.hifi_read_stats.report.txt"
+
+        Int    num_reads                = read_int("stat.num_reads.txt")
+        Int    bases_in_reads           = read_int("stat.bases_in_reads.txt")
+        String estimate_cvg             = read_string("stat.estimate_cvg.txt")
+        Int    bases_in_reads_over_10kb = read_int("stat.bases_in_reads_over_10kb.txt")
+        String estimate_cvg_reads_10kb  = read_string("stat.estimate_cvg_reads_10kb.txt")
+        Int    bases_in_reads_over_20kb = read_int("stat.bases_in_reads_over_20kb.txt")
+        String estimate_cvg_reads_20kb  = read_string("stat.estimate_cvg_reads_20kb.txt")
+        Int    q1_read_length           = read_int("stat.q1_read_length.txt")
+        Int    median_read_length       = read_int("stat.median_read_length.txt")
+        Int    q3_read_length           = read_int("stat.q3_read_length.txt")
+        Int    n50_read_length          = read_int("stat.n50_read_length.txt")
+        Int    max_read_length          = read_int("stat.max_read_length.txt")
+        Float  pct_q20_bases            = read_float("stat.pct_q20_bases.txt")
+        Float  pct_q30_bases            = read_float("stat.pct_q30_bases.txt")
+        Float  mean_read_base_qual      = read_float("stat.mean_read_base_qual.txt")
+        Float  mean_read_accuracy       = read_float("stat.mean_read_accuracy.txt")
+        Int    mean_num_passes          = read_int("stat.mean_num_passes.txt")
+        Float  mean_read_gc             = read_float("stat.mean_read_gc.txt")
+        Float  pct_bacteria             = read_float("stat.pct_bacteria.txt")
+        Float  pct_fungi                = read_float("stat.pct_fungi.txt")
+        Float  pct_virus                = read_float("stat.pct_virus.txt")
+        Float  pct_human                = read_float("stat.pct_human.txt")
+        Float  pct_unclassified         = read_float("stat.pct_unclassified.txt")
+        String top_genus                = read_string("stat.top_genus.txt")
+        Float  pct_top_genus            = read_float("stat.pct_top_genus.txt")
+        String top_species              = read_string("stat.top_species.txt")
+        Float  pct_top_species          = read_float("stat.pct_top_species.txt")
     }
 
     #########################
