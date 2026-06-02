@@ -1,6 +1,7 @@
 version 1.0
 
 import "../../../tasks/Utility/Taxonomy.wdl" as Tax
+import "../../../tasks/Utility/PacBioPbi.wdl" as Pbi
 import "../../../tasks/Preprocessing/BamConversion.wdl" as Prep
 import "../../../tasks/QC/HifiQC.wdl" as QC
 
@@ -15,6 +16,19 @@ workflow HifiPipeline {
             sample_fastq:             "Gzipped FASTQ produced from the input BAM",
             sample_kraken_report:     "Raw kraken2 report",
             sample_stats_report:      "Per-sample human-readable formatted report",
+            pbi_stats_map:            "Two-column TSV (key<TAB>value) of all PBI-derived metrics (ported from broadinstitute/long-read-pipelines)",
+            pbi_reads:                "Number of HiFi reads at or above the PBI quality threshold",
+            pbi_bases:                "Total bases across all reads (from PBI qStart/qEnd)",
+            pbi_mean_qual:            "Mean per-read Phred quality score from the PBI readQual field",
+            pbi_median_qual:          "Median per-read Phred quality score from the PBI readQual field",
+            polymerase_mean:          "Mean polymerase read length (sum of subread lengths per ZMW)",
+            polymerase_median:        "Median polymerase read length",
+            polymerase_stdev:         "Standard deviation of polymerase read lengths",
+            polymerase_n50:           "N50 polymerase read length",
+            subread_mean:             "Mean subread length (one entry per PBI record)",
+            subread_median:           "Median subread length",
+            subread_stdev:            "Standard deviation of subread lengths",
+            subread_n50:              "N50 subread length",
             tax_id:                   "NCBI taxonomy ID resolved from (genus, species)",
             expected_genome_size:     "Expected genome size in bases from the NCBI species_genome_size table; 'NA' if no entry",
             num_reads:                "Total number of HiFi reads",
@@ -49,6 +63,7 @@ workflow HifiPipeline {
 
     parameter_meta {
         input_bam:          "PacBio HiFi reads BAM file for the sample"
+        input_pbi:          "PacBio .pbi index file for the input BAM (used for ZMW/polymerase metrics)"
         sample_name:        "Sample identifier used as the output prefix for per-sample artifacts (e.g. bc2019)"
         genus:              "Genus name. Empty string allowed for metagenomic samples (disables taxonomy/coverage estimation)."
         species:            "Species name. Empty string allowed for metagenomic samples."
@@ -60,6 +75,7 @@ workflow HifiPipeline {
 
     input {
         File   input_bam
+        File   input_pbi
         String sample_name
         String genus
         String species
@@ -95,7 +111,12 @@ workflow HifiPipeline {
             confidence      = kraken2_confidence
     }
 
-    call QC.CreateHifiQCReport as t_05_CreateHifiQCReport {
+    call Pbi.SummarizeHifiPbi as t_05_SummarizeHifiPbi {
+        input:
+            pbi = input_pbi
+    }
+
+    call QC.CreateHifiQCReport as t_06_CreateHifiQCReport {
         input:
             sample_name              = sample_name,
             genus                    = genus,
@@ -134,18 +155,32 @@ workflow HifiPipeline {
     output {
         File   sample_fastq             = t_02_BamToFastqAndStats.fastq_gz
         File   sample_kraken_report     = t_04_HifiKraken2.kraken_report
-        File   sample_stats_report      = t_05_CreateHifiQCReport.hifi_stats_report
+        File   sample_stats_report      = t_06_CreateHifiQCReport.hifi_stats_report
+        File   pbi_stats_map            = t_05_SummarizeHifiPbi.pbi_stats_map
+
+        Int    pbi_reads                = t_05_SummarizeHifiPbi.pbi_reads
+        Int    pbi_bases                = t_05_SummarizeHifiPbi.pbi_bases
+        Float  pbi_mean_qual            = t_05_SummarizeHifiPbi.pbi_mean_qual
+        Float  pbi_median_qual          = t_05_SummarizeHifiPbi.pbi_median_qual
+        Int    polymerase_mean          = t_05_SummarizeHifiPbi.polymerase_mean
+        Int    polymerase_median        = t_05_SummarizeHifiPbi.polymerase_median
+        Int    polymerase_stdev         = t_05_SummarizeHifiPbi.polymerase_stdev
+        Int    polymerase_n50           = t_05_SummarizeHifiPbi.polymerase_n50
+        Int    subread_mean             = t_05_SummarizeHifiPbi.subread_mean
+        Int    subread_median           = t_05_SummarizeHifiPbi.subread_median
+        Int    subread_stdev            = t_05_SummarizeHifiPbi.subread_stdev
+        Int    subread_n50              = t_05_SummarizeHifiPbi.subread_n50
 
         Int    tax_id                   = t_01_GetTaxIdAndGenomeSize.tax_id
         String expected_genome_size     = t_01_GetTaxIdAndGenomeSize.expected_genome_size
 
         Int    num_reads                = t_03_HifiSeqkitStats.num_reads
         Int    bases_in_reads           = t_03_HifiSeqkitStats.bases_in_reads
-        String estimate_cvg             = t_05_CreateHifiQCReport.estimate_cvg
+        String estimate_cvg             = t_06_CreateHifiQCReport.estimate_cvg
         Int    bases_in_reads_over_10kb = t_03_HifiSeqkitStats.bases_in_reads_over_10kb
-        String estimate_cvg_reads_10kb  = t_05_CreateHifiQCReport.estimate_cvg_reads_10kb
+        String estimate_cvg_reads_10kb  = t_06_CreateHifiQCReport.estimate_cvg_reads_10kb
         Int    bases_in_reads_over_20kb = t_03_HifiSeqkitStats.bases_in_reads_over_20kb
-        String estimate_cvg_reads_20kb  = t_05_CreateHifiQCReport.estimate_cvg_reads_20kb
+        String estimate_cvg_reads_20kb  = t_06_CreateHifiQCReport.estimate_cvg_reads_20kb
         Int    q1_read_length           = t_03_HifiSeqkitStats.q1_read_length
         Int    median_read_length       = t_03_HifiSeqkitStats.median_read_length
         Int    q3_read_length           = t_03_HifiSeqkitStats.q3_read_length
