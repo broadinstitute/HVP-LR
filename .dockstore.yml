@@ -10,6 +10,10 @@ workflows:
     readMePath: /README.md
     authors:
       - name: Jonn Smith
+        orcid: 0000-0002-4279-8220
+        affiliation: Broad Institute
+      - name: Terrance Shea
+        affiliation: Broad Institute
     filters:
       branches:
         - main
