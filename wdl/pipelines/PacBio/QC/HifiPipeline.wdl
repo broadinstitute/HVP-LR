@@ -97,11 +97,38 @@ workflow HifiPipeline {
 
     call QC.HifiReadStats as t_05_HifiReadStats {
         input:
-            sample_name               = sample_name,
-            seqkit_stats_tsv          = t_03_HifiSeqkitStats.seqkit_stats_tsv,
-            seqkit_fx2tab_tsv         = t_03_HifiSeqkitStats.seqkit_fx2tab_tsv,
-            kraken2_stats_tsv         = t_04_HifiKraken2.kraken2_stats,
-            taxid_and_genome_size_tsv = t_01_GetTaxIdAndGenomeSize.taxid_and_genome_size_tsv
+            sample_name              = sample_name,
+            genus                    = genus,
+            species                  = species,
+            tax_id                   = t_01_GetTaxIdAndGenomeSize.tax_id,
+            expected_genome_size     = t_01_GetTaxIdAndGenomeSize.expected_genome_size,
+
+            num_reads                = t_03_HifiSeqkitStats.num_reads,
+            bases_in_reads           = t_03_HifiSeqkitStats.bases_in_reads,
+            bases_in_reads_over_10kb = t_03_HifiSeqkitStats.bases_in_reads_over_10kb,
+            bases_in_reads_over_20kb = t_03_HifiSeqkitStats.bases_in_reads_over_20kb,
+            q1_read_length           = t_03_HifiSeqkitStats.q1_read_length,
+            median_read_length       = t_03_HifiSeqkitStats.median_read_length,
+            q3_read_length           = t_03_HifiSeqkitStats.q3_read_length,
+            n50_read_length          = t_03_HifiSeqkitStats.n50_read_length,
+            max_read_length          = t_03_HifiSeqkitStats.max_read_length,
+            pct_q20_bases            = t_03_HifiSeqkitStats.pct_q20_bases,
+            pct_q30_bases            = t_03_HifiSeqkitStats.pct_q30_bases,
+            mean_read_gc             = t_03_HifiSeqkitStats.mean_read_gc,
+
+            mean_read_accuracy       = t_02_BamToFastqAndStats.mean_read_accuracy,
+            mean_qual_score          = t_02_BamToFastqAndStats.mean_qual_score,
+            mean_passes              = t_02_BamToFastqAndStats.mean_passes,
+
+            pct_bacteria             = t_04_HifiKraken2.pct_bacteria,
+            pct_fungi                = t_04_HifiKraken2.pct_fungi,
+            pct_virus                = t_04_HifiKraken2.pct_virus,
+            pct_human                = t_04_HifiKraken2.pct_human,
+            pct_unclassified         = t_04_HifiKraken2.pct_unclassified,
+            top_genus                = t_04_HifiKraken2.top_genus,
+            pct_top_genus            = t_04_HifiKraken2.pct_top_genus,
+            top_species              = t_04_HifiKraken2.top_species,
+            pct_top_species          = t_04_HifiKraken2.pct_top_species
     }
 
     output {
@@ -112,32 +139,32 @@ workflow HifiPipeline {
         Int    tax_id                   = t_01_GetTaxIdAndGenomeSize.tax_id
         String expected_genome_size     = t_01_GetTaxIdAndGenomeSize.expected_genome_size
 
-        Int    num_reads                = t_05_HifiReadStats.num_reads
-        Int    bases_in_reads           = t_05_HifiReadStats.bases_in_reads
+        Int    num_reads                = t_03_HifiSeqkitStats.num_reads
+        Int    bases_in_reads           = t_03_HifiSeqkitStats.bases_in_reads
         String estimate_cvg             = t_05_HifiReadStats.estimate_cvg
-        Int    bases_in_reads_over_10kb = t_05_HifiReadStats.bases_in_reads_over_10kb
+        Int    bases_in_reads_over_10kb = t_03_HifiSeqkitStats.bases_in_reads_over_10kb
         String estimate_cvg_reads_10kb  = t_05_HifiReadStats.estimate_cvg_reads_10kb
-        Int    bases_in_reads_over_20kb = t_05_HifiReadStats.bases_in_reads_over_20kb
+        Int    bases_in_reads_over_20kb = t_03_HifiSeqkitStats.bases_in_reads_over_20kb
         String estimate_cvg_reads_20kb  = t_05_HifiReadStats.estimate_cvg_reads_20kb
-        Int    q1_read_length           = t_05_HifiReadStats.q1_read_length
-        Int    median_read_length       = t_05_HifiReadStats.median_read_length
-        Int    q3_read_length           = t_05_HifiReadStats.q3_read_length
-        Int    n50_read_length          = t_05_HifiReadStats.n50_read_length
-        Int    max_read_length          = t_05_HifiReadStats.max_read_length
-        Float  pct_q20_bases            = t_05_HifiReadStats.pct_q20_bases
-        Float  pct_q30_bases            = t_05_HifiReadStats.pct_q30_bases
+        Int    q1_read_length           = t_03_HifiSeqkitStats.q1_read_length
+        Int    median_read_length       = t_03_HifiSeqkitStats.median_read_length
+        Int    q3_read_length           = t_03_HifiSeqkitStats.q3_read_length
+        Int    n50_read_length          = t_03_HifiSeqkitStats.n50_read_length
+        Int    max_read_length          = t_03_HifiSeqkitStats.max_read_length
+        Float  pct_q20_bases            = t_03_HifiSeqkitStats.pct_q20_bases
+        Float  pct_q30_bases            = t_03_HifiSeqkitStats.pct_q30_bases
         Float  mean_read_accuracy       = t_02_BamToFastqAndStats.mean_read_accuracy
         Float  mean_qual_score          = t_02_BamToFastqAndStats.mean_qual_score
         Int    mean_passes              = t_02_BamToFastqAndStats.mean_passes
-        Float  mean_read_gc             = t_05_HifiReadStats.mean_read_gc
-        Float  pct_bacteria             = t_05_HifiReadStats.pct_bacteria
-        Float  pct_fungi                = t_05_HifiReadStats.pct_fungi
-        Float  pct_virus                = t_05_HifiReadStats.pct_virus
-        Float  pct_human                = t_05_HifiReadStats.pct_human
-        Float  pct_unclassified         = t_05_HifiReadStats.pct_unclassified
-        String top_genus                = t_05_HifiReadStats.top_genus
-        Float  pct_top_genus            = t_05_HifiReadStats.pct_top_genus
-        String top_species              = t_05_HifiReadStats.top_species
-        Float  pct_top_species          = t_05_HifiReadStats.pct_top_species
+        Float  mean_read_gc             = t_03_HifiSeqkitStats.mean_read_gc
+        Float  pct_bacteria             = t_04_HifiKraken2.pct_bacteria
+        Float  pct_fungi                = t_04_HifiKraken2.pct_fungi
+        Float  pct_virus                = t_04_HifiKraken2.pct_virus
+        Float  pct_human                = t_04_HifiKraken2.pct_human
+        Float  pct_unclassified         = t_04_HifiKraken2.pct_unclassified
+        String top_genus                = t_04_HifiKraken2.top_genus
+        Float  pct_top_genus            = t_04_HifiKraken2.pct_top_genus
+        String top_species              = t_04_HifiKraken2.top_species
+        Float  pct_top_species          = t_04_HifiKraken2.pct_top_species
     }
 }
