@@ -341,7 +341,7 @@ task HifiKraken2 {
     }
 }
 
-task HifiCoverageAndReport {
+task CreateHifiQCReport {
 
     meta {
         description: "Compute estimated coverage (overall and for reads >10kb / >20kb) from pre-computed base counts plus an expected genome size, and render a per-sample human-readable boxed ASCII report aggregating all upstream metrics. All non-coverage values are passthrough from upstream tasks; this task does no parsing of upstream TSVs."

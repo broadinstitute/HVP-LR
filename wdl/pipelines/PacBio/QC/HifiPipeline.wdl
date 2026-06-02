@@ -95,7 +95,7 @@ workflow HifiPipeline {
             confidence      = kraken2_confidence
     }
 
-    call QC.HifiCoverageAndReport as t_05_HifiCoverageAndReport {
+    call QC.CreateHifiQCReport as t_05_CreateHifiQCReport {
         input:
             sample_name              = sample_name,
             genus                    = genus,
@@ -134,18 +134,18 @@ workflow HifiPipeline {
     output {
         File   sample_fastq             = t_02_BamToFastqAndStats.fastq_gz
         File   sample_kraken_report     = t_04_HifiKraken2.kraken_report
-        File   sample_stats_report      = t_05_HifiCoverageAndReport.hifi_stats_report
+        File   sample_stats_report      = t_05_CreateHifiQCReport.hifi_stats_report
 
         Int    tax_id                   = t_01_GetTaxIdAndGenomeSize.tax_id
         String expected_genome_size     = t_01_GetTaxIdAndGenomeSize.expected_genome_size
 
         Int    num_reads                = t_03_HifiSeqkitStats.num_reads
         Int    bases_in_reads           = t_03_HifiSeqkitStats.bases_in_reads
-        String estimate_cvg             = t_05_HifiCoverageAndReport.estimate_cvg
+        String estimate_cvg             = t_05_CreateHifiQCReport.estimate_cvg
         Int    bases_in_reads_over_10kb = t_03_HifiSeqkitStats.bases_in_reads_over_10kb
-        String estimate_cvg_reads_10kb  = t_05_HifiCoverageAndReport.estimate_cvg_reads_10kb
+        String estimate_cvg_reads_10kb  = t_05_CreateHifiQCReport.estimate_cvg_reads_10kb
         Int    bases_in_reads_over_20kb = t_03_HifiSeqkitStats.bases_in_reads_over_20kb
-        String estimate_cvg_reads_20kb  = t_05_HifiCoverageAndReport.estimate_cvg_reads_20kb
+        String estimate_cvg_reads_20kb  = t_05_CreateHifiQCReport.estimate_cvg_reads_20kb
         Int    q1_read_length           = t_03_HifiSeqkitStats.q1_read_length
         Int    median_read_length       = t_03_HifiSeqkitStats.median_read_length
         Int    q3_read_length           = t_03_HifiSeqkitStats.q3_read_length
