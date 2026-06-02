@@ -341,13 +341,13 @@ task HifiKraken2 {
     }
 }
 
-task HifiReadStats {
+task HifiCoverageAndReport {
 
     meta {
-        description: "Aggregate pre-computed per-sample scalar metrics into 3 coverage estimates and a human-readable boxed ASCII report. All non-coverage values are passed through from upstream tasks; this task does no parsing of upstream TSVs."
+        description: "Compute estimated coverage (overall and for reads >10kb / >20kb) from pre-computed base counts plus an expected genome size, and render a per-sample human-readable boxed ASCII report aggregating all upstream metrics. All non-coverage values are passthrough from upstream tasks; this task does no parsing of upstream TSVs."
 
         outputs: {
-            hifi_read_stats_report:   "Formatted ASCII-table report grouped by metric category",
+            hifi_stats_report:        "Formatted ASCII-table report grouped by metric category",
             estimate_cvg:             "Estimated coverage = bases_in_reads / expected_genome_size; '-' if expected_genome_size is not available",
             estimate_cvg_reads_10kb:  "Estimated coverage from reads >10kb; '-' if expected_genome_size is not available",
             estimate_cvg_reads_20kb:  "Estimated coverage from reads >20kb; '-' if expected_genome_size is not available"
@@ -463,7 +463,7 @@ task HifiReadStats {
         printf '%s\n' "${EST_CVG_10KB}" > estimate_cvg_reads_10kb.txt
         printf '%s\n' "${EST_CVG_20KB}" > estimate_cvg_reads_20kb.txt
 
-        REPORT="~{sample_name}.hifi_read_stats.report.txt"
+        REPORT="~{sample_name}.hifi_stats.report.txt"
         BAR="+----------------------------+---------------------+"
         FMT="| %-26s | %-19s |\n"
 
@@ -545,7 +545,7 @@ task HifiReadStats {
     >>>
 
     output {
-        File   hifi_read_stats_report  = "~{sample_name}.hifi_read_stats.report.txt"
+        File   hifi_stats_report       = "~{sample_name}.hifi_stats.report.txt"
         String estimate_cvg            = read_string("estimate_cvg.txt")
         String estimate_cvg_reads_10kb = read_string("estimate_cvg_reads_10kb.txt")
         String estimate_cvg_reads_20kb = read_string("estimate_cvg_reads_20kb.txt")
