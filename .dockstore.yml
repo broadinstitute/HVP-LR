@@ -1,0 +1,18 @@
+version: 1.2
+
+# Dockstore registration for HVP-LR workflows.
+# Reference: https://docs.dockstore.org/en/stable/getting-started/dockstore-yml.html
+
+workflows:
+  - name: HifiPipeline
+    subclass: WDL
+    primaryDescriptorPath: /wdl/pipelines/PacBio/QC/HifiPipeline.wdl
+    readMePath: /README.md
+    authors:
+      - name: Jonn Smith
+    filters:
+      branches:
+        - main
+        - /jts_.*/
+      tags:
+        - /.*/
