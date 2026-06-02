@@ -4,7 +4,7 @@ import "../../../tasks/Utility/Taxonomy.wdl" as Tax
 import "../../../tasks/Preprocessing/BamConversion.wdl" as Prep
 import "../../../tasks/QC/HifiQC.wdl" as QC
 
-workflow HifiPipeline {
+workflow HifiReadQCPipeline {
 
     meta {
         description: "Single-sample PacBio HiFi read QC pipeline. Takes one BAM plus genus/species/sample_name, performs taxonomy lookup, converts BAM to FASTQ, computes seqkit and kraken2 stats, and aggregates per-sample metrics. Returns each metric as an individual scalar plus a human-readable report, the FASTQ, and the raw kraken2 report."

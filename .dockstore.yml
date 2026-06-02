@@ -4,9 +4,9 @@ version: 1.2
 # Reference: https://docs.dockstore.org/en/stable/getting-started/dockstore-yml.html
 
 workflows:
-  - name: HifiPipeline
+  - name: HifiReadQCPipeline
     subclass: WDL
-    primaryDescriptorPath: /wdl/pipelines/PacBio/QC/HifiPipeline.wdl
+    primaryDescriptorPath: /wdl/pipelines/PacBio/QC/HifiReadQCPipeline.wdl
     readMePath: /README.md
     authors:
       - name: Jonn Smith
