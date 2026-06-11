@@ -180,7 +180,9 @@ Trivy runs twice per image: once as a build gate (table format, `exit-code: 1`),
 
 Override the threshold per repo via the `TRIVY_LARGE_IMAGE_BYTES` GitHub Actions repository variable.
 
-## WDL validation
+## WDL style + validation
+
+Style rules (file layout, boilerplate, task skeleton, naming, output ordering, `t_NN_` call aliasing, etc.) live in [docs/WDL_STYLE_RULES.md](docs/WDL_STYLE_RULES.md). Read it before writing or reformatting any `.wdl` file.
 
 The `miniwdl check --strict` pre-commit hook is the **only** WDL gate. There is no CI safety net. If a contributor commits without running pre-commit (`git commit -n`), broken WDLs land on `main`.
 
@@ -233,6 +235,7 @@ Concurrency: `release-main` group, no cancel-in-progress.
 
 ## Adding a new WDL — checklist
 
+0. Read [docs/WDL_STYLE_RULES.md](docs/WDL_STYLE_RULES.md) — file layout, task skeleton, naming, call aliasing.
 1. Write under `wdl/<workflow>.wdl`.
 2. (Optional) Inputs JSON alongside as `wdl/<workflow>.inputs.json`.
 3. Run `miniwdl check --strict wdl/<workflow>.wdl` locally. The pre-commit hook runs the same.

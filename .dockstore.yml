@@ -1,0 +1,23 @@
+version: 1.2
+
+# Dockstore registration for HVP-LR workflows.
+# Reference: https://docs.dockstore.org/en/stable/getting-started/dockstore-yml.html
+
+workflows:
+  - name: HifiReadQCPipeline
+    subclass: WDL
+    primaryDescriptorPath: /wdl/pipelines/PacBio/QC/HifiReadQCPipeline.wdl
+    readMePath: /README.md
+    authors:
+      - name: Jonn Smith
+        orcid: 0000-0002-4279-8220
+        affiliation: Broad Institute
+      - name: Terrance Shea
+        orcid: 0000-0002-6586-9298
+        affiliation: Broad Institute
+    filters:
+      branches:
+        - main
+        - /jts_.*/
+      tags:
+        - /.*/

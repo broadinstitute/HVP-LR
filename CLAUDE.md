@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Before doing any work in this repo, read [AGENTS.md](AGENTS.md) in its entirety.** Then read [CONTRIBUTING.md](CONTRIBUTING.md).
+**Before doing any work in this repo, read [AGENTS.md](AGENTS.md) in its entirety.** Then read [CONTRIBUTING.md](CONTRIBUTING.md). **Before touching any `.wdl` file, also read [docs/WDL_STYLE_RULES.md](docs/WDL_STYLE_RULES.md).**
 
 This is not optional and not skippable for "small" or "obvious" changes. Many file edits in this repo look trivial but have non-obvious CI consequences:
 

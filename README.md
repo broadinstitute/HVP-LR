@@ -10,9 +10,14 @@ HVP-LR/
 │   └── <image>/                  #   (Dockerfile, Makefile, env.yaml, .dockerignore,
 │                                 #    .trivyignore, .trivy-ignore-policy.rego)
 ├── wdl/                          # WDL workflow definitions
+│   ├── structs/Structs.wdl       #   Shared RuntimeAttr struct
+│   ├── tasks/<Category>/         #   Task modules (Preprocessing, QC, Utility, ...)
+│   └── pipelines/<Tech>/<Cat>/   #   End-to-end workflows (<Tech> = PacBio | ONT | ILMN | TechAgnostic)
+├── docs/                         # Project docs (WDL style rules, etc.)
 ├── scripts/                      # CI helper scripts
 ├── .github/workflows/            # docker.yml (build/push/scan), cd.yml (release)
 ├── .pre-commit-config.yaml       # WDL validation hook
+├── .dockstore.yml                # Dockstore workflow registration manifest
 ├── dev-requirements.txt          # Local dev tooling
 ├── VERSION                       # Repo-level version
 ├── LICENSE                       # MIT License
@@ -27,14 +32,16 @@ HVP-LR/
 | What | Where |
 |------|-------|
 | A new Docker image | `docker/<image-name>/` |
-| A new WDL workflow or task | `wdl/<workflow>.wdl` |
-| A workflow's inputs JSON | `wdl/<workflow>.inputs.json` (alongside the WDL) |
+| A new task module | `wdl/tasks/<Category>/<Name>.wdl` |
+| A new pipeline / workflow | `wdl/pipelines/<Tech>/<Category>/<Name>.wdl` |
+| A workflow's inputs JSON | Alongside the WDL as `<Name>.inputs.json` |
 | Helper / one-off scripts | `scripts/` (avoid if not CI-related; otherwise put inside the relevant `docker/<image>/`) |
 
 ## Where to read next
 
 - **Setting up locally / opening a PR** → [CONTRIBUTING.md](CONTRIBUTING.md)
 - **CI mechanics, Docker conventions, releases, Trivy filtering, hard rules** → [AGENTS.md](AGENTS.md)
+- **WDL style rules** (file layout, task skeleton, naming, call aliasing) → [docs/WDL_STYLE_RULES.md](docs/WDL_STYLE_RULES.md)
 - **License terms** → [LICENSE](LICENSE)
 
 If you're an AI agent (Claude or otherwise), start with [CLAUDE.md](CLAUDE.md) / [AGENTS.md](AGENTS.md).
@@ -46,6 +53,14 @@ If you're an AI agent (Claude or otherwise), start with [CLAUDE.md](CLAUDE.md) /
 | `hvp-monolith` | `docker/hvp-monolith/` | All-in-one QC/alignment toolbox (FastQC, MultiQC, samtools, biopython, pysam, miniwdl, pigz, zstd, GNU parallel, jq) on `mambaorg/micromamba:2.4.0-ubuntu24.04` |
 
 Images are published to `ghcr.io/broadinstitute/hvp-lr/<image>:<version>` and (when GCR is configured) `us.gcr.io/broadinstitute/<image>:<version>`. GHCR packages are private by default.
+
+## Current workflows
+
+| Workflow | Path | Purpose |
+|----------|------|---------|
+| `HifiReadQCPipeline` | `wdl/pipelines/PacBio/QC/HifiReadQCPipeline.wdl` | Single-sample PacBio HiFi read QC: taxonomy lookup, BAM→FASTQ, seqkit + kraken2 stats, per-sample human-readable report |
+
+Workflows are registered with Dockstore via [.dockstore.yml](.dockstore.yml).
 
 ## License
 
