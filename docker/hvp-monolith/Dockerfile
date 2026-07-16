@@ -154,4 +154,9 @@ RUN python --version && \
 # the software. Bundle the repo-root LICENSE into the image.
 COPY LICENSE /opt/hvp-lr/LICENSE
 
+LABEL org.opencontainers.image.source="https://github.com/broadinstitute/HVP-LR" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.description="HVP-LR monolith: VirSorter2, geNomad, CheckM2, vConTACT2, DeepVirFinder, VIBRANT, MultiQC, FastQC, samtools, CONCOCT, MetaMDBG, and supporting bioinformatics utilities for viral metagenomics" \
+      org.opencontainers.image.vendor="Broad Institute HVP-LR"
+
 WORKDIR /data

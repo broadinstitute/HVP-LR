@@ -121,7 +121,7 @@ task HifiSeqkitStats {
         File seqkit_fx2tab_tsv        = "~{fq_basename}.seqkit_fx2tab.tsv"
 
         Int   num_reads                = read_int("stat.num_reads.txt")
-        Int   bases_in_reads           = read_int("stat.bases_in_reads.txt")
+        Float bases_in_reads           = read_float("stat.bases_in_reads.txt")
         Int   max_read_length          = read_int("stat.max_read_length.txt")
         Int   q1_read_length           = read_int("stat.q1_read_length.txt")
         Int   median_read_length       = read_int("stat.median_read_length.txt")
@@ -130,8 +130,8 @@ task HifiSeqkitStats {
         Float pct_q20_bases            = read_float("stat.pct_q20_bases.txt")
         Float pct_q30_bases            = read_float("stat.pct_q30_bases.txt")
         Float mean_read_gc             = read_float("stat.mean_read_gc.txt")
-        Int   bases_in_reads_over_10kb = read_int("stat.bases_in_reads_over_10kb.txt")
-        Int   bases_in_reads_over_20kb = read_int("stat.bases_in_reads_over_20kb.txt")
+        Float bases_in_reads_over_10kb = read_float("stat.bases_in_reads_over_10kb.txt")
+        Float bases_in_reads_over_20kb = read_float("stat.bases_in_reads_over_20kb.txt")
     }
 
     #########################
@@ -184,9 +184,7 @@ task HifiKraken2 {
 
     parameter_meta {
         input_fastq:           "HiFi reads in FASTQ format (gzipped)"
-        kraken2_db_hash:       "Kraken2 database hash.k2d file"
-        kraken2_db_opts:       "Kraken2 database opts.k2d file"
-        kraken2_db_taxo:       "Kraken2 database taxo.k2d file"
+        kraken2_db_tgz:        "Kraken2 database as a single compressed archive (.tar.zst); extracted at runtime. Compatible with the k2_pluspf archive format from gs://pathogen-public-dbs/."
         confidence:            "Kraken2 confidence threshold (default 0.001)"
         extra_args:            "Additional command-line args appended verbatim to the kraken2 invocation"
         runtime_attr_override: "Override the default runtime attributes"
@@ -194,9 +192,7 @@ task HifiKraken2 {
 
     input {
         File  input_fastq
-        File  kraken2_db_hash
-        File  kraken2_db_opts
-        File  kraken2_db_taxo
+        File  kraken2_db_tgz
         Float confidence = 0.001
 
         String extra_args = ""
@@ -206,9 +202,7 @@ task HifiKraken2 {
 
     String fq_basename = basename(input_fastq, ".fastq.gz")
 
-    # Disk: DB files are read-only and don't transform — keep them at 1x.
-    # Only the FASTQ scales by the §6 default 5x multiplier.
-    Int disk_size = 20 + ceil(size(kraken2_db_hash, "GB") + size(kraken2_db_opts, "GB") + size(kraken2_db_taxo, "GB")) + ceil(5.0 * size(input_fastq, "GB"))
+    Int disk_size = 20 + ceil(3.0 * size(kraken2_db_tgz, "GB")) + ceil(5.0 * size(input_fastq, "GB"))
 
     command <<<
         set -euxo pipefail
@@ -228,18 +222,17 @@ task HifiKraken2 {
         echo "NUM_CPUS=${NUM_CPUS}  RAM_IN_GB=${RAM_IN_GB}  USABLE_RAM_GB=${USABLE_RAM_GB}  MEM_PER_THREAD_GB=${MEM_PER_THREAD_GB}  JAVA_MEM_GB=${JAVA_MEM_GB}"
         # ---- end preamble ----
 
-        # Assemble kraken2 database directory from pre-extracted files
+        # Extract kraken2 database archive; find the directory containing hash.k2d
         mkdir -p kraken2_db
-        ln -s ~{kraken2_db_hash} kraken2_db/hash.k2d
-        ln -s ~{kraken2_db_opts} kraken2_db/opts.k2d
-        ln -s ~{kraken2_db_taxo} kraken2_db/taxo.k2d
+        zstd -d ~{kraken2_db_tgz} --stdout | tar -x -C kraken2_db
+        DB_ROOT=$(dirname "$(find kraken2_db -name 'hash.k2d' | head -1)")
 
         kraken2 \
             --confidence ~{confidence} \
             --output ~{fq_basename}.kraken_output.txt \
             --report ~{fq_basename}.kraken_report.txt \
             --threads "${NUM_CPUS}" \
-            --db kraken2_db \
+            --db "${DB_ROOT}" \
             ~{extra_args} \
             ~{input_fastq}
 
@@ -322,18 +315,18 @@ task HifiKraken2 {
     #########################
     RuntimeAttr default_attr = object {
         cpu_cores:          8,
-        mem_gb:             128,
+        mem_gb:             160,
         disk_gb:            disk_size,
         boot_disk_gb:       25,
-        preemptible_tries:  2,
+        preemptible_tries:  3,
         max_retries:        1,
-        docker:             "staphb/kraken2:2.17.1"
+        docker:             "us-central1-docker.pkg.dev/broad-hvp-dasc/hvp-longread-containers/hvp-monolith:0.0.3"
     }
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
     runtime {
         cpu:                    select_first([runtime_attr.cpu_cores,         default_attr.cpu_cores])
         memory:                 select_first([runtime_attr.mem_gb,            default_attr.mem_gb]) + " GiB"
-        disks: "local-disk " +  select_first([runtime_attr.disk_gb,           default_attr.disk_gb]) + " HDD"
+        disks: "local-disk " +  select_first([runtime_attr.disk_gb,           default_attr.disk_gb]) + " SSD"
         bootDiskSizeGb:         select_first([runtime_attr.boot_disk_gb,      default_attr.boot_disk_gb])
         preemptible:            select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
         maxRetries:             select_first([runtime_attr.max_retries,       default_attr.max_retries])
@@ -395,9 +388,9 @@ task CreateHifiQCReport {
         String expected_genome_size
 
         Int    num_reads
-        Int    bases_in_reads
-        Int    bases_in_reads_over_10kb
-        Int    bases_in_reads_over_20kb
+        Float  bases_in_reads
+        Float  bases_in_reads_over_10kb
+        Float  bases_in_reads_over_20kb
         Int    q1_read_length
         Int    median_read_length
         Int    q3_read_length
@@ -445,9 +438,9 @@ task CreateHifiQCReport {
         # ---- end preamble ----
 
         EXPECTED_GENOME_SIZE="~{expected_genome_size}"
-        SUM_LEN=~{bases_in_reads}
-        B10K=~{bases_in_reads_over_10kb}
-        B20K=~{bases_in_reads_over_20kb}
+        SUM_LEN=$(printf "%.0f" ~{bases_in_reads})
+        B10K=$(printf "%.0f" ~{bases_in_reads_over_10kb})
+        B20K=$(printf "%.0f" ~{bases_in_reads_over_20kb})
 
         if [[ "${EXPECTED_GENOME_SIZE}" =~ ^[0-9]+$ ]] && [[ "${EXPECTED_GENOME_SIZE}" -gt 0 ]]; then
             EST_CVG=$(( SUM_LEN / EXPECTED_GENOME_SIZE ))

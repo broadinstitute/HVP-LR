@@ -52,9 +52,7 @@ workflow HifiReadQCPipeline {
         sample_name:        "Sample identifier used as the output prefix for per-sample artifacts (e.g. bc2019)"
         genus:              "Genus name. Empty string allowed for metagenomic samples (disables taxonomy/coverage estimation)."
         species:            "Species name. Empty string allowed for metagenomic samples."
-        kraken2_db_hash:    "Kraken2 database hash.k2d file (pre-extracted)"
-        kraken2_db_opts:    "Kraken2 database opts.k2d file (pre-extracted)"
-        kraken2_db_taxo:    "Kraken2 database taxo.k2d file (pre-extracted)"
+        kraken2_db_tgz:     "Kraken2 database as a single compressed archive (.tar.zst); extracted at runtime"
         kraken2_confidence: "Kraken2 confidence threshold"
     }
 
@@ -64,9 +62,7 @@ workflow HifiReadQCPipeline {
         String genus
         String species
 
-        File  kraken2_db_hash    = "gs://gcid-cil-shed-archive/kraken_db/k2_pluspf_20251015/hash.k2d"  # !FileCoercion
-        File  kraken2_db_opts    = "gs://gcid-cil-shed-archive/kraken_db/k2_pluspf_20251015/opts.k2d"  # !FileCoercion
-        File  kraken2_db_taxo    = "gs://gcid-cil-shed-archive/kraken_db/k2_pluspf_20251015/taxo.k2d"  # !FileCoercion
+        File  kraken2_db_tgz     = "gs://pathogen-public-dbs/jhu/k2_pluspf_20250714.tar.zst"  # !FileCoercion
         Float kraken2_confidence = 0.001
     }
 
@@ -88,11 +84,9 @@ workflow HifiReadQCPipeline {
 
     call QC.HifiKraken2 as t_04_HifiKraken2 {
         input:
-            input_fastq     = t_02_BamToFastqAndStats.fastq_gz,
-            kraken2_db_hash = kraken2_db_hash,
-            kraken2_db_opts = kraken2_db_opts,
-            kraken2_db_taxo = kraken2_db_taxo,
-            confidence      = kraken2_confidence
+            input_fastq    = t_02_BamToFastqAndStats.fastq_gz,
+            kraken2_db_tgz = kraken2_db_tgz,
+            confidence     = kraken2_confidence
     }
 
     call QC.CreateHifiQCReport as t_05_CreateHifiQCReport {
@@ -140,11 +134,11 @@ workflow HifiReadQCPipeline {
         String expected_genome_size     = t_01_GetTaxIdAndGenomeSize.expected_genome_size
 
         Int    num_reads                = t_03_HifiSeqkitStats.num_reads
-        Int    bases_in_reads           = t_03_HifiSeqkitStats.bases_in_reads
+        Float  bases_in_reads           = t_03_HifiSeqkitStats.bases_in_reads
         String estimate_cvg             = t_05_CreateHifiQCReport.estimate_cvg
-        Int    bases_in_reads_over_10kb = t_03_HifiSeqkitStats.bases_in_reads_over_10kb
+        Float  bases_in_reads_over_10kb = t_03_HifiSeqkitStats.bases_in_reads_over_10kb
         String estimate_cvg_reads_10kb  = t_05_CreateHifiQCReport.estimate_cvg_reads_10kb
-        Int    bases_in_reads_over_20kb = t_03_HifiSeqkitStats.bases_in_reads_over_20kb
+        Float  bases_in_reads_over_20kb = t_03_HifiSeqkitStats.bases_in_reads_over_20kb
         String estimate_cvg_reads_20kb  = t_05_CreateHifiQCReport.estimate_cvg_reads_20kb
         Int    q1_read_length           = t_03_HifiSeqkitStats.q1_read_length
         Int    median_read_length       = t_03_HifiSeqkitStats.median_read_length

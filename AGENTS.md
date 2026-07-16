@@ -89,7 +89,7 @@ Only two variables are image-specific. Everything else is shared boilerplate to 
 |----------|----------|-------|
 | `IMAGE_NAME` | **yes** | Repository-relative image name. Must match the directory name under `docker/`. The CI workflow and the auto-bump key off this. |
 | `VERSION` | **yes** | Semver `X.Y.Z`. Bumped automatically by CI on `main` if you don't bump it yourself (see Auto-versioning). |
-| `REPOS` | inherit | Registry prefixes for `make push`. Standard:<br>`us.gcr.io/broadinstitute`<br>`ghcr.io/broadinstitute` |
+| `REPOS` | inherit | Registry prefixes for `make push`. Standard:<br>`ghcr.io/broadinstitute/hvp-lr`<br>GCR mirror (`us.gcr.io/<GCR_PROJECT>`) is added by CI only when the `GCP_SA_KEY` secret is set — do not include it in the Makefile. |
 | `PLATFORMS` | inherit | Default `linux/amd64,linux/arm64`. Override only if a dep genuinely doesn't build on one arch — flag this in PR review. |
 | `BUILDX_ATTEST_OFF`, `MANIFEST_OUTPUT` | inherit | Force Docker v2.2 manifest mediatypes. **Do not change** — see Manifest format. |
 | `BUILDER` | inherit | Name for the on-demand multi-arch buildx builder. |

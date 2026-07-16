@@ -2,8 +2,8 @@ IMAGE_NAME = hvp-monolith
 VERSION = 0.0.3
 
 REPOS = \
-	us.gcr.io/broadinstitute \
-	ghcr.io/broadinstitute
+	ghcr.io/broadinstitute/hvp-lr \
+	us-central1-docker.pkg.dev/broad-hvp-dasc/hvp-longread-containers
 
 ################################################################################
 ################################################################################
