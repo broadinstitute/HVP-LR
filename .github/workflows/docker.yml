@@ -28,14 +28,15 @@ concurrency:
 
 env:
   GHCR_REGISTRY: ghcr.io
-  # GCR project (without registry host); change via repo variable GCR_PROJECT.
+  # GCP project ID (historically named GCR_PROJECT when this workflow also
+  # published to us.gcr.io; the GCR mirror was removed after Google's GCR
+  # sunset, but the repo-variable name is preserved for compatibility).
   GCR_PROJECT: ${{ vars.GCR_PROJECT || 'broadinstitute' }}
-  GCR_REGISTRY: us.gcr.io
   # GAR (Artifact Registry) target. Both repo variables MUST be set for the
-  # GAR push to activate (also requires secrets.GCP_SA_KEY — shared with GCR
-  # auth). GAR_LOCATION is the region (e.g. us-central1); GAR_REPO is the
-  # bare repo name (e.g. hvp-longread-containers); the GCP project comes
-  # from GCR_PROJECT above. Resulting image ref:
+  # GAR push to activate (also requires secrets.GCP_SA_KEY). GAR_LOCATION is
+  # the region (e.g. us-central1); GAR_REPO is the bare repo name (e.g.
+  # hvp-longread-containers); the GCP project comes from GCR_PROJECT above.
+  # Resulting image ref:
   # <GAR_LOCATION>-docker.pkg.dev/<GCR_PROJECT>/<GAR_REPO>/<image>:<tag>.
   GAR_LOCATION: ${{ vars.GAR_LOCATION }}
   GAR_REPO: ${{ vars.GAR_REPO }}
@@ -215,7 +216,7 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # 3b) Merge per-arch intermediates into multi-arch final tags via
-  #     `docker buildx imagetools create`, push to GHCR (and GCR mirror if
+  #     `docker buildx imagetools create`, push to GHCR (and GAR mirror if
   #     configured), then Trivy-scan the merged image.
   # ---------------------------------------------------------------------------
   merge-and-scan:
@@ -261,17 +262,6 @@ jobs:
           [ -z "$p" ] && p="linux/amd64,linux/arm64"
           echo "list=$p" >> "$GITHUB_OUTPUT"
 
-      - name: Detect GCR mirror availability
-        id: gcr
-        env:
-          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
-        run: |
-          if [ -n "${GCP_SA_KEY:-}" ]; then
-            echo "have=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "have=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Detect GAR mirror availability
         id: gar
         env:
@@ -295,20 +285,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Authenticate to GCP
-        if: steps.gcr.outputs.have == 'true'
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
-
-      - name: Log in to GCR
-        if: steps.gcr.outputs.have == 'true'
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.GCR_REGISTRY }}
-          username: _json_key
-          password: ${{ secrets.GCP_SA_KEY }}
-
       - name: Log in to GAR
         if: steps.gar.outputs.have == 'true'
         uses: docker/login-action@v3
@@ -322,7 +298,6 @@ jobs:
         run: |
           owner_repo_lc="$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
           echo "ghcr_image=${{ env.GHCR_REGISTRY }}/${owner_repo_lc}/${{ matrix.image }}" >> "$GITHUB_OUTPUT"
-          echo "gcr_image=${{ env.GCR_REGISTRY }}/${{ env.GCR_PROJECT }}/${{ matrix.image }}" >> "$GITHUB_OUTPUT"
           echo "gar_image=${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.GCR_PROJECT }}/${{ env.GAR_REPO }}/${{ matrix.image }}" >> "$GITHUB_OUTPUT"
 
       - name: Metadata (GHCR tags)
@@ -337,18 +312,6 @@ jobs:
           #   - Default branch only: also `latest`
           # (PR rule omitted — PR runs go through pr-build-scan which never
           # reaches this job.)
-          tags: |
-            type=raw,value=${{ steps.ver.outputs.version }}
-            type=ref,event=branch,enable=${{ github.ref_name == github.event.repository.default_branch }}
-            type=ref,event=branch,prefix=branch-,enable=${{ github.ref_name != github.event.repository.default_branch }}
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Metadata (GCR tags)
-        id: meta_gcr
-        if: steps.gcr.outputs.have == 'true'
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ steps.refs.outputs.gcr_image }}
           tags: |
             type=raw,value=${{ steps.ver.outputs.version }}
             type=ref,event=branch,enable=${{ github.ref_name == github.event.repository.default_branch }}
@@ -370,7 +333,6 @@ jobs:
       - name: Merge per-arch intermediates into multi-arch manifest list
         env:
           GHCR_TAGS:     ${{ steps.meta_ghcr.outputs.tags }}
-          GCR_TAGS:      ${{ steps.meta_gcr.outputs.tags }}
           GAR_TAGS:      ${{ steps.meta_gar.outputs.tags }}
           GHCR_IMAGE:    ${{ steps.refs.outputs.ghcr_image }}
           VERSION:       ${{ steps.ver.outputs.version }}
@@ -381,11 +343,6 @@ jobs:
           while IFS= read -r t; do
             [ -n "$t" ] && tag_args+=("-t" "$t")
           done <<< "$GHCR_TAGS"
-          if [ -n "${GCR_TAGS:-}" ]; then
-            while IFS= read -r t; do
-              [ -n "$t" ] && tag_args+=("-t" "$t")
-            done <<< "$GCR_TAGS"
-          fi
           if [ -n "${GAR_TAGS:-}" ]; then
             while IFS= read -r t; do
               [ -n "$t" ] && tag_args+=("-t" "$t")

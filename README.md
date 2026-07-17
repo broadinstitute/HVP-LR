@@ -69,7 +69,7 @@ If you're an AI agent (Claude or otherwise), start with [CLAUDE.md](CLAUDE.md) /
 |-------|--------|---------|
 | `hvp-monolith` | `docker/hvp-monolith/` | All-in-one QC/alignment toolbox (FastQC, MultiQC, samtools, biopython, pysam, miniwdl, pigz, zstd, GNU parallel, jq) on `mambaorg/micromamba:2.4.0-ubuntu24.04` |
 
-Images are published to `ghcr.io/broadinstitute/hvp-lr/<image>:<version>` and (when GCR is configured) `us.gcr.io/broadinstitute/<image>:<version>`. GHCR packages are private by default.
+Images are published to `ghcr.io/broadinstitute/hvp-lr/<image>:<version>` and (when GAR is configured) `us-central1-docker.pkg.dev/<GCR_PROJECT>/<GAR_REPO>/<image>:<version>`. GHCR packages are private by default.
 
 ## Current workflows
 
