@@ -1,0 +1,187 @@
+--- a/src/strucclustutils/ProstT5.cpp
++++ b/src/strucclustutils/ProstT5.cpp
+@@ -2,9 +2,36 @@
+ 
+ #include "llama.h"
+ 
++#include <cstdarg>
++#include <cstdio>
++#include <cstdlib>
+ #include <limits>
+ #include <vector>
+ 
++// HVP-LR diagnostic build: emit [hvp-lr] traces unconditionally so we can
++// distinguish "CUDA backend loaded but device not attached" from
++// "model offloaded to GPU but inference fell back to CPU" in production
++// stderr. Set HVP_LR_QUIET=1 to suppress llama internal logs (the
++// [hvp-lr] lines remain regardless).
++static void hvp_lr_log(const char* fmt, ...) {
++    va_list ap;
++    va_start(ap, fmt);
++    std::fputs("[hvp-lr] ", stderr);
++    std::vfprintf(stderr, fmt, ap);
++    std::fputc('\n', stderr);
++    std::fflush(stderr);
++    va_end(ap);
++}
++
++static const char* hvp_lr_dev_type_str(ggml_backend_dev_t dev) {
++    switch (ggml_backend_dev_type(dev)) {
++        case GGML_BACKEND_DEVICE_TYPE_CPU:   return "CPU";
++        case GGML_BACKEND_DEVICE_TYPE_GPU:   return "GPU";
++        case GGML_BACKEND_DEVICE_TYPE_ACCEL: return "ACCEL";
++        default: return "UNKNOWN";
++    }
++}
++
+ static char number_to_char(unsigned int n) {
+     switch(n) {
+         case 0:  return 'A';
+@@ -114,11 +141,47 @@
+ // };
+ 
+ LlamaInitGuard::LlamaInitGuard(bool verbose) {
+-    if (!verbose) {
++    // HVP-LR: pass through llama internal logs to stderr unless HVP_LR_QUIET=1.
++    // Upstream's "silence unless verbosity>3" gate is unreachable because the
++    // MMseqs2 PARAM_V regex caps verbosity at 3; the no-op callback hid every
++    // GPU/CUDA init signal we needed during the silent-fallback regression.
++    const char* quiet_env = std::getenv("HVP_LR_QUIET");
++    bool quiet = !verbose && quiet_env != nullptr && quiet_env[0] == '1';
++    if (quiet) {
+         llama_log_set([](ggml_log_level, const char *, void *) {}, nullptr);
++    } else {
++        llama_log_set(
++            [](ggml_log_level level, const char * text, void * /*user*/) {
++                const char* lvl = "INFO";
++                switch (level) {
++                    case GGML_LOG_LEVEL_ERROR: lvl = "ERROR"; break;
++                    case GGML_LOG_LEVEL_WARN:  lvl = "WARN";  break;
++                    case GGML_LOG_LEVEL_INFO:  lvl = "INFO";  break;
++                    case GGML_LOG_LEVEL_DEBUG: lvl = "DEBUG"; break;
++                    case GGML_LOG_LEVEL_CONT:  std::fputs(text, stderr); std::fflush(stderr); return;
++                    default: break;
++                }
++                std::fprintf(stderr, "[llama:%s] %s", lvl, text);
++                std::fflush(stderr);
++            },
++            nullptr);
+     }
++    hvp_lr_log("LlamaInitGuard: backend_init begin (verbose=%d, quiet=%d)",
++               verbose ? 1 : 0, quiet ? 1 : 0);
+     llama_backend_init();
++    hvp_lr_log("LlamaInitGuard: backend_init done");
+     llama_numa_init(GGML_NUMA_STRATEGY_DISABLED);
++    hvp_lr_log("LlamaInitGuard: numa_init done (DISABLED)");
++    hvp_lr_log("LlamaInitGuard: ggml backend device count = %zu",
++               ggml_backend_dev_count());
++    for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
++        ggml_backend_dev_t dev = ggml_backend_dev_get(i);
++        hvp_lr_log("LlamaInitGuard:   dev[%zu] name=%s type=%s desc=%s",
++                   i,
++                   ggml_backend_dev_name(dev),
++                   hvp_lr_dev_type_str(dev),
++                   ggml_backend_dev_description(dev));
++    }
+ }
+ 
+ LlamaInitGuard::~LlamaInitGuard() {
+@@ -126,8 +189,23 @@
+ }
+ 
+ ProstT5Model::ProstT5Model(const std::string& model_file, std::string& device) {
++    hvp_lr_log("ProstT5Model: ctor model_file=%s device='%s'",
++               model_file.c_str(), device.c_str());
+     auto mparams = llama_model_default_params();
+     std::vector<ggml_backend_dev_t> devices = parse_device_list(device);
++    hvp_lr_log("ProstT5Model: parse_device_list returned %zu entr%s (incl. nullptr terminator)",
++               devices.size(), devices.size() == 1 ? "y" : "ies");
++    for (size_t i = 0; i < devices.size(); ++i) {
++        if (!devices[i]) {
++            hvp_lr_log("ProstT5Model:   parsed[%zu] = nullptr (terminator)", i);
++        } else {
++            hvp_lr_log("ProstT5Model:   parsed[%zu] name=%s type=%s desc=%s",
++                       i,
++                       ggml_backend_dev_name(devices[i]),
++                       hvp_lr_dev_type_str(devices[i]),
++                       ggml_backend_dev_description(devices[i]));
++        }
++    }
+     if (!devices.empty()) {
+         mparams.devices = devices.data();
+     }
+@@ -145,7 +223,15 @@
+         mparams.n_gpu_layers = 0;
+     }
+     mparams.use_mmap        = true;
++    hvp_lr_log("ProstT5Model: gpus=%d n_gpu_layers=%d use_mmap=%d",
++               gpus, mparams.n_gpu_layers, (int)mparams.use_mmap);
++    hvp_lr_log("ProstT5Model: llama_load_model_from_file begin");
+     model = llama_load_model_from_file(model_file.c_str(), mparams);
++    if (model == nullptr) {
++        hvp_lr_log("ProstT5Model: llama_load_model_from_file FAILED (model==nullptr)");
++    } else {
++        hvp_lr_log("ProstT5Model: llama_load_model_from_file OK");
++    }
+ 
+     // for (auto & la : params.lora_adapters) {
+     //     lora_adapter_container loaded_la;
+@@ -174,7 +260,17 @@
+     cparams.embeddings = true;
+     cparams.attention_type = LLAMA_ATTENTION_TYPE_NON_CAUSAL;
+ 
++    hvp_lr_log("ProstT5: ctx ctor n_threads=%d n_batch=%u n_ubatch=%u n_ctx=%u embeddings=1 attn=NON_CAUSAL",
++               threads,
++               (unsigned)cparams.n_batch,
++               (unsigned)cparams.n_ubatch,
++               (unsigned)cparams.n_ctx);
+     ctx = llama_new_context_with_model(model.model, cparams);
++    if (ctx == nullptr) {
++        hvp_lr_log("ProstT5: llama_new_context_with_model FAILED (ctx==nullptr)");
++    } else {
++        hvp_lr_log("ProstT5: llama_new_context_with_model OK");
++    }
+     // batch = llama_batch_init(4096, 0, 1);
+     // if (!params.lora_init_without_apply) {
+     //     llama_lora_adapter_clear(lctx);
+@@ -212,17 +308,25 @@
+ }
+ 
+ std::vector<std::string> ProstT5::getDevices() {
++    hvp_lr_log("ProstT5::getDevices: enumerating %zu backend device(s)",
++               ggml_backend_dev_count());
+     std::vector<std::string> devices;
+     for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+         ggml_backend_dev_t dev = ggml_backend_dev_get(i);
+         std::string name = ggml_backend_dev_name(dev);
+         std::string description = ggml_backend_dev_description(dev);
++        const char* type_str = hvp_lr_dev_type_str(dev);
+         // ignore Metal in CI
+         if (name == "Metal" && description.find("Paravirtual") != std::string::npos) {
++            hvp_lr_log("ProstT5::getDevices:   skip[%zu] name=%s type=%s desc=%s (paravirtual Metal)",
++                       i, name.c_str(), type_str, description.c_str());
+             continue;
+         }
++        hvp_lr_log("ProstT5::getDevices:   keep[%zu] name=%s type=%s desc=%s",
++                   i, name.c_str(), type_str, description.c_str());
+         devices.push_back(name);
+     }
++    hvp_lr_log("ProstT5::getDevices: returning %zu device name(s)", devices.size());
+     return devices;
+ }
+ 
+--- a/src/strucclustutils/structcreatedb.cpp
++++ b/src/strucclustutils/structcreatedb.cpp
+@@ -773,7 +773,11 @@
+             }
+         }
+ 
+-        LlamaInitGuard guard(par.verbosity > 3);
++        // HVP-LR: force verbose llama init. MMseqs2 PARAM_V regex caps
++        // verbosity at 3 (^[0-3]{1}$), so the upstream `par.verbosity > 3`
++        // gate is unreachable from the CLI. Without this we can't see
++        // CUDA backend init signals during silent-fallback regressions.
++        LlamaInitGuard guard(true);
+         std::vector<std::string> devices = ProstT5::getDevices();
+         for (std::vector<std::string>::iterator it = devices.begin(); it != devices.end(); ++it) {
+             Debug(Debug::INFO) << *it << "\n";

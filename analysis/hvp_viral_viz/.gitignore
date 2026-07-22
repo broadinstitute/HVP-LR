@@ -1,0 +1,18 @@
+# Bulk data — see analysis/README.md "No bulk data in git" rule.
+# Reference / per-sample / cohort artifacts live in GCS; document URIs in README.
+
+data/
+out/
+refs/
+
+# Per-module caches.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Editor / OS noise.
+.DS_Store
+*.swp
+
+# Per-slide PDF render previews — regenerable from .pdf via pdftoppm.
+slides/**/preview-*.png

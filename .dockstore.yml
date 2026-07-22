@@ -19,5 +19,158 @@ workflows:
       branches:
         - main
         - /jts_.*/
+        - /tshea\/.*/
+      tags:
+        - /.*/
+
+  - name: HvpReadProcessing
+    subclass: WDL
+    primaryDescriptorPath: /wdl/pipelines/PacBio/Metagenomics/HvpReadProcessing.wdl
+    readMePath: /README.md
+    authors:
+      - name: Terrance Shea
+        orcid: 0000-0002-6586-9298
+        affiliation: Broad Institute
+      - name: Jonn Smith
+        orcid: 0000-0002-4279-8220
+        affiliation: Broad Institute
+    filters:
+      branches:
+        - main
+        - /jts_.*/
+        - /tshea\/.*/
+      tags:
+        - /.*/
+
+  - name: HvpAssembly
+    subclass: WDL
+    primaryDescriptorPath: /wdl/pipelines/PacBio/Metagenomics/HvpAssembly.wdl
+    readMePath: /README.md
+    authors:
+      - name: Terrance Shea
+        orcid: 0000-0002-6586-9298
+        affiliation: Broad Institute
+      - name: Jonn Smith
+        orcid: 0000-0002-4279-8220
+        affiliation: Broad Institute
+    filters:
+      branches:
+        - main
+        - /jts_.*/
+        - /tshea\/.*/
+      tags:
+        - /.*/
+
+  - name: HvpReadRescue
+    subclass: WDL
+    primaryDescriptorPath: /wdl/pipelines/PacBio/Metagenomics/HvpReadRescue.wdl
+    readMePath: /README.md
+    authors:
+      - name: Terrance Shea
+        orcid: 0000-0002-6586-9298
+        affiliation: Broad Institute
+      - name: Jonn Smith
+        orcid: 0000-0002-4279-8220
+        affiliation: Broad Institute
+    filters:
+      branches:
+        - main
+        - /jts_.*/
+        - /tshea\/.*/
+      tags:
+        - /.*/
+
+  - name: HvpViralPipeline
+    subclass: WDL
+    primaryDescriptorPath: /wdl/pipelines/PacBio/Metagenomics/HvpViralPipeline.wdl
+    readMePath: /README.md
+    authors:
+      - name: Terrance Shea
+        orcid: 0000-0002-6586-9298
+        affiliation: Broad Institute
+      - name: Jonn Smith
+        orcid: 0000-0002-4279-8220
+        affiliation: Broad Institute
+    filters:
+      branches:
+        - main
+        - /jts_.*/
+        - /tshea\/.*/
+      tags:
+        - /.*/
+
+  - name: HvpMagsPipeline
+    subclass: WDL
+    primaryDescriptorPath: /wdl/pipelines/PacBio/Metagenomics/HvpMagsPipeline.wdl
+    readMePath: /README.md
+    authors:
+      - name: Terrance Shea
+        orcid: 0000-0002-6586-9298
+        affiliation: Broad Institute
+      - name: Jonn Smith
+        orcid: 0000-0002-4279-8220
+        affiliation: Broad Institute
+    filters:
+      branches:
+        - main
+        - /jts_.*/
+        - /tshea\/.*/
+      tags:
+        - /.*/
+
+  - name: HvpViralProteinAnnotation
+    subclass: WDL
+    primaryDescriptorPath: /wdl/pipelines/PacBio/Metagenomics/HvpViralProteinAnnotation.wdl
+    readMePath: /README.md
+    authors:
+      - name: Jonn Smith
+        orcid: 0000-0002-4279-8220
+        affiliation: Broad Institute
+      - name: Terrance Shea
+        orcid: 0000-0002-6586-9298
+        affiliation: Broad Institute
+    filters:
+      branches:
+        - main
+        - /jts_.*/
+        - /tshea\/.*/
+      tags:
+        - /.*/
+
+  - name: FoldseekStructuralSearch
+    subclass: WDL
+    primaryDescriptorPath: /wdl/pipelines/TechAgnostic/ProteinAnnotation/FoldseekStructuralSearch.wdl
+    readMePath: /README.md
+    authors:
+      - name: Jonn Smith
+        orcid: 0000-0002-4279-8220
+        affiliation: Broad Institute
+      - name: Terrance Shea
+        orcid: 0000-0002-6586-9298
+        affiliation: Broad Institute
+    filters:
+      branches:
+        - main
+        - /jts_.*/
+        - /tshea\/.*/
+      tags:
+        - /.*/
+
+  - name: Virsorter2OnContigs
+    subclass: WDL
+    primaryDescriptorPath: /wdl/pipelines/TechAgnostic/Metagenomics/Virsorter2OnContigs.wdl
+    readMePath: /README.md
+    authors:
+      - name: Jonn Smith
+        orcid: 0000-0002-4279-8220
+        affiliation: Broad Institute
+      - name: Terrance Shea
+        orcid: 0000-0002-6586-9298
+        affiliation: Broad Institute
+    filters:
+      branches:
+        - main
+        - /jts_.*/
+        - /tshea\/.*/
       tags:
         - /.*/

@@ -1,0 +1,264 @@
+--- a/src/strucclustutils/ProstT5.h
++++ b/src/strucclustutils/ProstT5.h
+@@ -26,11 +26,23 @@
+ 
+ class ProstT5 {
+ public:
+-    ProstT5(ProstT5Model& model, int threads);
++    // HVP-LR: ubatch param threaded through so structcreatedb.cpp can pick a
++    // VRAM-budget-aware physical batch size at runtime (env override
++    // HVP_LR_PROSTT5_GPU_UBATCH or dynamic default from free GPU memory).
++    // Smaller n_ubatch shrinks the per-ctx CUDA0 compute buffer ~linearly
++    // and fits more ctxs per GPU; n_ctx + n_batch stay pinned at 2048 to
++    // preserve max-seq capacity.
++    ProstT5(ProstT5Model& model, int threads, int ubatch = 2048);
+     ~ProstT5();
+ 
+     static std::vector<std::string> getDevices();
+-    
++
++    // HVP-LR: free VRAM in bytes for the given device string (first GPU
++    // entry in a comma-separated device list, or first GPU device when
++    // device == "auto"/""). Returns 0 if the device cannot be resolved or
++    // backend memory query is unsupported.
++    static size_t getDeviceFreeBytes(const std::string& device);
++
+     std::string predict(const std::string& aa);
+     void perf();
+ 
+--- a/src/strucclustutils/ProstT5.cpp
++++ b/src/strucclustutils/ProstT5.cpp
+@@ -250,17 +250,29 @@
+     llama_free_model(model);
+ }
+ 
+-ProstT5::ProstT5(ProstT5Model& model, int threads) : model(model) {
++ProstT5::ProstT5(ProstT5Model& model, int threads, int ubatch) : model(model) {
+     auto cparams = llama_context_default_params();
+     cparams.n_threads = threads;
+     cparams.n_threads_batch = threads;
+-    cparams.n_ubatch = 2048;
++    // HVP-LR: n_ubatch is the physical sub-batch inside a logical batch.
++    // Shrinking it reduces the CUDA0 compute buffer ~linearly without
++    // touching max-seq capacity (n_ctx + n_batch stay at 2048, which
++    // pairs with the upstream prostt5SplitLength default of 2046).
++    // Floor at 256 to avoid pathological per-call overhead.
++    if (ubatch < 256) ubatch = 256;
++    if (ubatch > 2048) ubatch = 2048;
++    cparams.n_ubatch = (uint32_t)ubatch;
+     cparams.n_batch = 2048;
+     cparams.n_ctx = 2048;
+     cparams.embeddings = true;
+     cparams.attention_type = LLAMA_ATTENTION_TYPE_NON_CAUSAL;
++    // HVP-LR: enable flash-attention kernel where the backend supports it.
++    // llama.cpp logs a warning and falls back to standard attention if the
++    // active backend (CPU/CUDA t5encoder NON_CAUSAL) lacks a flash impl,
++    // so this is safe to set unconditionally.
++    cparams.flash_attn = true;
+ 
+-    hvp_lr_log("ProstT5: ctx ctor n_threads=%d n_batch=%u n_ubatch=%u n_ctx=%u embeddings=1 attn=NON_CAUSAL",
++    hvp_lr_log("ProstT5: ctx ctor n_threads=%d n_batch=%u n_ubatch=%u n_ctx=%u embeddings=1 attn=NON_CAUSAL flash_attn=1",
+                threads,
+                (unsigned)cparams.n_batch,
+                (unsigned)cparams.n_ubatch,
+@@ -330,6 +342,49 @@
+     return devices;
+ }
+ 
++// HVP-LR: returns free VRAM bytes for the first GPU device matched by the
++// device string. Used by structcreatedb.cpp to size n_ubatch dynamically.
++// device argument follows the same syntax llama.cpp uses: "auto" / "" /
++// "all" pick the first enumerated GPU; a comma-separated list picks the
++// first entry. Returns 0 on any failure (caller should fall back to a
++// conservative default).
++size_t ProstT5::getDeviceFreeBytes(const std::string& device) {
++    ggml_backend_dev_t target = nullptr;
++    bool anyGpu = device.empty() || device == "auto" || device == "all";
++    std::string first = device;
++    size_t comma = device.find(',');
++    if (comma != std::string::npos) {
++        first = device.substr(0, comma);
++    }
++    if (!anyGpu) {
++        target = ggml_backend_dev_by_name(first.c_str());
++        if (target != nullptr &&
++            ggml_backend_dev_type(target) != GGML_BACKEND_DEVICE_TYPE_GPU) {
++            target = nullptr;
++        }
++    }
++    if (target == nullptr) {
++        for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
++            ggml_backend_dev_t dev = ggml_backend_dev_get(i);
++            if (ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_GPU) {
++                target = dev;
++                break;
++            }
++        }
++    }
++    if (target == nullptr) {
++        hvp_lr_log("ProstT5::getDeviceFreeBytes: no GPU device found for '%s'",
++                   device.c_str());
++        return 0;
++    }
++    size_t freeB = 0;
++    size_t totalB = 0;
++    ggml_backend_dev_memory(target, &freeB, &totalB);
++    hvp_lr_log("ProstT5::getDeviceFreeBytes: %s free=%zu total=%zu",
++               ggml_backend_dev_name(target), freeB, totalB);
++    return freeB;
++}
++
+ void ProstT5::perf() {
+     llama_perf_context_print(ctx);
+ }
+--- a/src/strucclustutils/structcreatedb.cpp
++++ b/src/strucclustutils/structcreatedb.cpp
+@@ -17,6 +17,9 @@
+ #include "itoa.h"
+ #include "MathUtil.h"
+ 
++#include <cstdlib>
++#include <memory>
++
+ #ifdef HAVE_PROSTT5
+ #include "ProstT5.h"
+ #if !defined(__CYGWIN__) && !defined(__EMSCRIPTEN__) && !defined(__APPLE__)
+@@ -819,23 +822,133 @@
+             writer.open();
+ 
+             Debug::Progress progress(reader.getSize());
++
++            // HVP-LR multi-context GPU concurrency.
++            //
++            // Upstream's GPU path sets localThreads = devices.size() (almost
++            // always 1 CUDA device) and constructs one ProstT5Model + ProstT5
++            // ctx per OMP thread. Result: ProstT5 inference runs single-
++            // threaded sequentially at ~175 ms/seq on T4 even though both the
++            // device and the kernels are GPU-resident.
++            //
++            // Fix: share one ProstT5Model (mmap'd weights, single GPU upload)
++            // across N llama_contexts. Each context owns its own KV cache +
++            // compute buffer (~256 MB at n_ctx=n_batch=2048, F16). VRAM
++            // budget on 12 GB: 1.2 GB weights + ~0.6 GB CUDA baseline +
++            // N * 0.26 GB ctxs. N=8 fits comfortably with headroom; N=32+
++            // fits VRAM but SM occupancy saturates around 8-12 on
++            // T4 (40 SMs) / L4 (58) / A10G (80). Override via
++            // HVP_LR_PROSTT5_GPU_CTXS env var.
++            //
++            // Bit-equivalent to upstream at the 3Di-string level: every
++            // sequence still hits the same single-seq llama_encode path,
++            // only dispatched across more contexts.
+ #ifdef OPENMP
+-            size_t localThreads = par.gpu == 1 ? devices.size() : 1;
++            size_t localThreads = 1;
++            if (par.gpu == 1) {
++                size_t defaultGpuCtxs = 8;
++                const char* envCtxs = std::getenv("HVP_LR_PROSTT5_GPU_CTXS");
++                if (envCtxs != nullptr && envCtxs[0] != '\0') {
++                    long parsed = std::strtol(envCtxs, nullptr, 10);
++                    if (parsed > 0) {
++                        defaultGpuCtxs = static_cast<size_t>(parsed);
++                    }
++                }
++                localThreads = std::min<size_t>(
++                    defaultGpuCtxs,
++                    static_cast<size_t>(std::max(1, par.threads)));
++                Debug(Debug::INFO) << "[hvp-lr] ProstT5 GPU concurrency: "
++                                   << localThreads << " context(s)\n";
++            }
+ #endif
++            std::unique_ptr<ProstT5Model> sharedModel;
++            if (par.gpu == 1) {
++                std::string sharedDevice = devices[0];
++                sharedModel.reset(new ProstT5Model(modelWeights.c_str(), sharedDevice));
++            }
++            // HVP-LR dynamic n_ubatch.
++            //
++            // n_ubatch is the only ProstT5 cparam safe to shrink without
++            // paired changes to par.prostt5SplitLength: it caps physical
++            // sub-batch size inside a logical batch (drives the CUDA0
++            // compute buffer ~linearly) while leaving n_ctx/n_batch =
++            // 2048 intact so the encoder still accepts up-to-2046-AA
++            // chunks. At n_ubatch=2048 the compute buffer is ~2264 MiB
++            // per ctx (observed in createdb.log); per-ctx VRAM at that
++            // setting is ~3.8 GB (1.5 GB KV + 2.26 GB compute + small
++            // misc).
++            //
++            // Strategy: pick the largest n_ubatch <= 2048 that fits the
++            // detected free VRAM after subtracting model weights, CUDA
++            // baseline, and N * per-ctx KV (~1.5 GB at n_ctx=2048, F16).
++            // Snap to safe steps so swept benchmarks land on the same
++            // grid across boots. Env override HVP_LR_PROSTT5_GPU_UBATCH
++            // wins if set.
++            int prostt5Ubatch = 2048;
++            if (par.gpu == 1) {
++                const char* envUbatch = std::getenv("HVP_LR_PROSTT5_GPU_UBATCH");
++                if (envUbatch != nullptr && envUbatch[0] != '\0') {
++                    long parsed = std::strtol(envUbatch, nullptr, 10);
++                    if (parsed >= 256 && parsed <= 2048) {
++                        prostt5Ubatch = static_cast<int>(parsed);
++                    } else if (parsed > 0) {
++                        Debug(Debug::WARNING)
++                            << "[hvp-lr] HVP_LR_PROSTT5_GPU_UBATCH=" << parsed
++                            << " out of range [256,2048]; using default\n";
++                    }
++                    Debug(Debug::INFO) << "[hvp-lr] ProstT5 n_ubatch (env): "
++                                       << prostt5Ubatch << "\n";
++                } else {
++                    size_t freeBytes = ProstT5::getDeviceFreeBytes(devices[0]);
++                    if (freeBytes > 0) {
++                        const size_t MB = 1024ULL * 1024ULL;
++                        const size_t sharedOverheadMB = 2000;
++                        const size_t perCtxKvMB = 1500;
++                        const size_t reserveMB = 1000;
++                        const double mbPerUbatchToken = 1.1;
++                        long freeMB = static_cast<long>(freeBytes / MB);
++                        long needed = static_cast<long>(sharedOverheadMB
++                                      + reserveMB + localThreads * perCtxKvMB);
++                        long budgetMB = freeMB - needed;
++                        int picked = 256;
++                        if (budgetMB > 0 && localThreads > 0) {
++                            long perCtxComputeMB = budgetMB / static_cast<long>(localThreads);
++                            long ubatchCalc = static_cast<long>(perCtxComputeMB / mbPerUbatchToken);
++                            static const int steps[] = {2048, 1536, 1024, 768, 512, 256};
++                            for (int s : steps) {
++                                if (ubatchCalc >= s) { picked = s; break; }
++                            }
++                        }
++                        prostt5Ubatch = picked;
++                        Debug(Debug::INFO)
++                            << "[hvp-lr] ProstT5 n_ubatch (auto): " << prostt5Ubatch
++                            << " (freeMB=" << freeMB
++                            << " ctxs=" << localThreads << ")\n";
++                    } else {
++                        Debug(Debug::INFO) << "[hvp-lr] ProstT5 n_ubatch (fallback): "
++                                           << prostt5Ubatch
++                                           << " (free-VRAM query unavailable)\n";
++                    }
++                }
++            }
+ #pragma omp parallel num_threads(localThreads)
+             {
+                 int thread_idx = 0;
+ #ifdef OPENMP
+                 thread_idx = omp_get_thread_num();
+ #endif
+-                std::string device = "none";
+                 int localThreads = par.threads;
++                std::unique_ptr<ProstT5Model> ownedModel;
++                ProstT5Model* modelPtr = nullptr;
+                 if (par.gpu == 1) {
+-                    device = devices[thread_idx];
+                     localThreads = 1;
++                    modelPtr = sharedModel.get();
++                } else {
++                    std::string device = "none";
++                    ownedModel.reset(new ProstT5Model(modelWeights.c_str(), device));
++                    modelPtr = ownedModel.get();
+                 }
+-                ProstT5Model model(modelWeights.c_str(), device);
+-                ProstT5 context(model, localThreads);
++                ProstT5 context(*modelPtr, localThreads, prostt5Ubatch);
+                 const char newline = '\n';
+                 std::string result;
+ #pragma omp for schedule(dynamic, 1)

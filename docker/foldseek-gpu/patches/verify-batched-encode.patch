@@ -1,0 +1,14 @@
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -19,6 +19,11 @@
+         target_link_libraries(prostt5 llama)
+         target_link_libraries(foldseek-framework prostt5)
+         target_compile_definitions(foldseek-framework PUBLIC -DHAVE_PROSTT5=1)
++        # HVP-LR: standalone batched-encode verifier (pre-flight for the
++        # proposed batched-encode patch). Links llama directly, no foldseek
++        # dependencies, so the binary is small and starts fast.
++        add_executable(verify_batched_encode strucclustutils/verify_batched_encode.cpp)
++        target_link_libraries(verify_batched_encode llama)
+ endif()
+ 
+ if(ENABLE_CUDA)

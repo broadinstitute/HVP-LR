@@ -13,6 +13,9 @@ HVP-LR/
 │   ├── structs/Structs.wdl       #   Shared RuntimeAttr struct
 │   ├── tasks/<Category>/         #   Task modules (Preprocessing, QC, Utility, ...)
 │   └── pipelines/<Tech>/<Cat>/   #   End-to-end workflows (<Tech> = PacBio | ONT | ILMN | TechAgnostic)
+├── analysis/                     # Downstream tools and analyses consuming
+│   └── <project>/                #   pipeline outputs (figures, cluster labels,
+│                                 #   marker tables, …). NOT executed by WDL.
 ├── docs/                         # Project docs (WDL style rules, etc.)
 ├── scripts/                      # CI helper scripts
 ├── .github/workflows/            # docker.yml (build/push/scan), cd.yml (release)
@@ -36,6 +39,20 @@ HVP-LR/
 | A new pipeline / workflow | `wdl/pipelines/<Tech>/<Category>/<Name>.wdl` |
 | A workflow's inputs JSON | Alongside the WDL as `<Name>.inputs.json` |
 | Helper / one-off scripts | `scripts/` (avoid if not CI-related; otherwise put inside the relevant `docker/<image>/`) |
+| A downstream analysis / visualization tool | `analysis/<project>/` — see [analysis/README.md](analysis/README.md) for conventions |
+
+## The `analysis/` folder
+
+[`analysis/`](analysis/) holds downstream tools and analyses that operate on
+data produced by HVP-LR pipelines (and sibling reference datasets like
+BFVD / ICTV). It is **not** part of the WDL execution path — code here is
+invoked by humans (or notebooks) against pipeline outputs to produce
+figures, cluster labels, marker tables, and other interpretive artifacts.
+
+Each project lives in its own self-contained subdirectory with its own
+`README.md`, dependency manifest, source, and tests. See
+[`analysis/README.md`](analysis/README.md) for full conventions and the
+list of current projects.
 
 ## Where to read next
 
@@ -52,7 +69,7 @@ If you're an AI agent (Claude or otherwise), start with [CLAUDE.md](CLAUDE.md) /
 |-------|--------|---------|
 | `hvp-monolith` | `docker/hvp-monolith/` | All-in-one QC/alignment toolbox (FastQC, MultiQC, samtools, biopython, pysam, miniwdl, pigz, zstd, GNU parallel, jq) on `mambaorg/micromamba:2.4.0-ubuntu24.04` |
 
-Images are published to `ghcr.io/broadinstitute/hvp-lr/<image>:<version>` and (when GCR is configured) `us.gcr.io/broadinstitute/<image>:<version>`. GHCR packages are private by default.
+Images are published to `ghcr.io/broadinstitute/hvp-lr/<image>:<version>` and (when GAR is configured) `us-central1-docker.pkg.dev/<GCR_PROJECT>/<GAR_REPO>/<image>:<version>`. GHCR packages are private by default.
 
 ## Current workflows
 

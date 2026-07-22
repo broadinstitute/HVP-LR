@@ -129,6 +129,21 @@ COPY --from=builder /opt/conda         /opt/conda
 COPY --from=builder /opt/deepvirfinder /opt/deepvirfinder
 COPY --from=builder /usr/local/bin     /usr/local/bin
 RUN mkdir -p /data && chown -R $MAMBA_USER:$MAMBA_USER /data
+
+# CVE-2026-45447 (openssl PKCS7_verify heap-use-after-free, HIGH). The
+# mambaorg/micromamba:2.4.0-ubuntu24.04 base ships libssl3t64 3.0.13-0ubuntu3.6;
+# Ubuntu published the patched 3.0.13-0ubuntu3.11 but the upstream image has
+# not been rebuilt. libssl/openssl are reached by curl/wget/git/apt/python-ssl,
+# so this is not a paper vulnerability — Trivy correctly fails the build gate.
+# Version is pinned exactly so the fix is auditable; when Ubuntu publishes a
+# newer patchset (e.g. -0ubuntu3.12) apt will error out on this pin, at which
+# point either bump the pin or drop the block once mambaorg rebuilds the base.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends --only-upgrade \
+        libssl3t64=3.0.13-0ubuntu3.11 \
+        openssl=3.0.13-0ubuntu3.11 && \
+    rm -rf /var/lib/apt/lists/*
+
 USER $MAMBA_USER
 
 # Enable conda environment activation for subsequent RUN commands.
@@ -153,5 +168,10 @@ RUN python --version && \
 # MIT requires the copyright notice + license text travel with copies of
 # the software. Bundle the repo-root LICENSE into the image.
 COPY LICENSE /opt/hvp-lr/LICENSE
+
+LABEL org.opencontainers.image.source="https://github.com/broadinstitute/HVP-LR" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.description="HVP-LR monolith: VirSorter2, geNomad, CheckM2, vConTACT2, DeepVirFinder, VIBRANT, MultiQC, FastQC, samtools, CONCOCT, MetaMDBG, and supporting bioinformatics utilities for viral metagenomics" \
+      org.opencontainers.image.vendor="Broad Institute HVP-LR"
 
 WORKDIR /data
