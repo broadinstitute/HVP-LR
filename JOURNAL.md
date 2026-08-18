@@ -116,3 +116,36 @@ left in place but unreferenced — retire after the 10 images build+push in CI. 
 (1) build/push via CI to populate the registry before running workflows; (2) grouped-image
 tags (hvp-align/binning/pyutils = 0.1.0) don't match task `tool_version` meta — expected,
 same as monolith precedent.
+
+## 2026-08-18T23:06:00Z — Remediate Trivy HIGH/CRITICAL across the 10 new images
+
+**Context.** CI Trivy scans failed on all 10 new images (run 32187017969).
+Reproduced locally with trivy 0.74.0 using CI-equivalent flags.
+
+**Decision / action.** Four distinct findings, fixed as follows:
+- libssl3t64 CVE-2026-45447 (HIGH, all 10): the micromamba base ships it
+  un-upgraded → added a root `apt-get upgrade` layer to every Dockerfile.
+- setuptools CVE-2025-47273 (HIGH, 7 python images): base env shipped 70.3.0
+  → pinned `setuptools>=78.1.1` in those env.yaml files (installs 84.0.0).
+- pip vendored SBOM (same 7): pip's `_vendor/bom.cdx.json` + `vendor.txt` still
+  advertise setuptools==70.3.0 even though pip only vendors pkg_resources (no
+  PackageIndex → CVE code absent). Trivy reads that CycloneDX SBOM. Removed the
+  two stale metadata files so the image SBOM is accurate.
+- keras 3.12.0 (HIGH×3, checkm2) and ruby json 2.18.0 (CRITICAL, hvp-binning):
+  both unreachable given pipeline inputs (checkm2 loads only its own trusted
+  model; DAS_Tool's ruby never parses untrusted JSON) and neither is cleanly
+  fixable (keras bump unverifiable without the 3 GB DB; json is a compiled
+  default gem). Per operator decision, documented VEX not-affected entries in
+  each image's .trivyignore with exp:2026-11-30 to force quarterly re-review.
+
+**Why.** Prefer real fixes (apt upgrade, setuptools pin, accurate SBOM) over
+suppression; used .trivyignore only where the finding is provably unreachable
+AND a clean fix would risk scientific correctness or is impossible.
+
+**Evidence.** Local rebuild + Trivy rescan of all 10 with per-image rego +
+.trivyignore: 10/10 PASS (0 HIGH/CRITICAL). Fixes verified individually first
+(hvp-align OS-only clean; checkv SBOM-removal clean; pip/checkv still functional
+after SBOM removal).
+
+**Outcome.** All 10 images pass the CI Trivy gate. Two documented VEX exceptions
+tracked with expiry. Local tags `hvp-*:sec`; real refs built by CI.

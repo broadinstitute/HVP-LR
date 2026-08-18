@@ -12,4 +12,15 @@
 #
 # =============================================================================
 #
-# (no entries yet)
+# --- keras 3.12.0 (VEX: not-affected) — reviewed 2026-08-18 ---
+# All three require loading a malicious .keras/.h5 model file (path traversal on
+# load, Lambda-layer deserialization RCE, arbitrary file read). checkm2 loads
+# ONLY its own trusted model shipped with the CheckM2 database; pipeline inputs
+# are genome FASTAs, never user-supplied keras models — so unreachable here.
+# Clean fix (keras>=3.15) is withheld: it cannot be verified against MAG-scoring
+# correctness without the ~3 GB CheckM2 DB, and a silent scoring regression is a
+# worse outcome than an unreachable CVE. Remove once checkm2 upstream supports a
+# patched keras. exp forces quarterly re-review.
+CVE-2026-11816 exp:2026-11-30
+CVE-2026-12481 exp:2026-11-30
+CVE-2026-1669 exp:2026-11-30

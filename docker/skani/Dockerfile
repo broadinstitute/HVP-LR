@@ -8,6 +8,12 @@
 # Multi-arch: linux/amd64 + linux/arm64 (bioconda ships both for these pins).
 FROM mambaorg/micromamba:2.4.0-ubuntu24.04
 
+# Patch base-OS security updates (libssl3t64 CVE-2026-45447 et al.) that the
+# pinned micromamba base tag ships un-upgraded. Root needed for apt; drop back.
+USER root
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+USER $MAMBA_USER
+
 LABEL org.opencontainers.image.source="https://github.com/broadinstitute/HVP-LR" \
       org.opencontainers.image.url="https://github.com/bluenote-1577/skani" \
       org.opencontainers.image.licenses="MIT" \
