@@ -66,7 +66,7 @@ task Myloasm {
         boot_disk_gb:       25,
         preemptible_tries:  0,
         max_retries:        1,
-        docker:             "us-central1-docker.pkg.dev/broad-hvp-dasc/hvp-longread-containers/hvp-monolith:0.0.3"
+        docker:             "us-central1-docker.pkg.dev/broad-hvp-dasc/hvp-longread-containers/myloasm:0.5.1"
     }
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
     runtime {

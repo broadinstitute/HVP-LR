@@ -82,3 +82,37 @@
 - `plots/sample_diag_{pca,umap,dendrogram}.png`, `plots/sample_diag_coords.parquet`, `plots/umap_by_prevalence.png`, `plots/umap_per_sample.png`.
 
 **Follow-ups.** None blocking. Output is gitignored under `analysis/hvp_viral_viz/.gitignore`; source on branch `tshea/wdl-metagenomics-poc`. The high (98.3%) explained variance on sample × virus suggests the sample-level structure is dominated by a small number of axes — would be worth a follow-on noting whether the dendrogram clusters track any sample-prep covariate the user has but I don't (sample plate, extraction batch, sequencing run).
+
+## 2026-08-18T18:12:00Z — Split hvp-monolith into 10 focused images
+
+**Context.** Single `hvp-monolith:0.0.3` image backed every non-trivial WDL task;
+too large to maintain. Goal: per-task tool inventory + smaller replacement images
+that keep all workflows running.
+
+**Decision / action.** Inventoried all 31 tasks across `wdl/tasks` + `wdl/pipelines`
+(tools per task in `docs/CONTAINER_SPLIT.md`). 8 tasks already used small public/custom
+images; 23 rode the monolith. Rehomed those 23 into 10 new `docker/<image>/` dirs
+(each with the six CI-required files, Makefile/dotfiles copied verbatim per AGENTS.md):
+hvp-align, myloasm, kraken2, hvp-binning, checkm2, skani, genomad, checkv, virsorter2,
+hvp-pyutils. Rewired all 23 `docker:` defaults in the WDLs (grep confirms 0 monolith refs).
+
+**Why.** Fault lines follow the monolith's own conflicting python envs (base 3.12 /
+checkm2 3.10 / viral 3.10). Grouped only where tools share one conda solve + pipeline
+stage (hvp-binning = 4 binners; hvp-pyutils = 9 pure-pandas/pysam glue tasks) to keep
+image count low without recreating a monolith. Pins copied verbatim from monolith
+env.yaml so behavior is identical. Dropped tools no WDL calls: deepvirfinder, vcontact2,
+vibrant, flye, hifiasm_meta, metamdbg, concoct, bracken, fastqc, multiqc, standalone
+diamond — most of the size win.
+
+**Evidence.** `miniwdl check` passes on all 9 pipelines post-edit. Six-file completeness
+verified for all 10 dirs. Local docker smoke-build BLOCKED: sandbox docker containers
+have no DNS to conda.anaconda.org ("Could not resolve hostname"), though the host does —
+environment limitation, not an image defect. Install idiom (`micromamba install -n base
+-f env.yaml`) matches the monolith's own working build. Images must be built by CI/a
+networked host.
+
+**Outcome.** Workflows now reference 10 small images instead of 1 fat one. `hvp-monolith/`
+left in place but unreferenced — retire after the 10 images build+push in CI. Follow-ups:
+(1) build/push via CI to populate the registry before running workflows; (2) grouped-image
+tags (hvp-align/binning/pyutils = 0.1.0) don't match task `tool_version` meta — expected,
+same as monolith precedent.

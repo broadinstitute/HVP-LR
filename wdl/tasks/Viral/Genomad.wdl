@@ -68,7 +68,7 @@ task Genomad {
         # version.txt is unique to the geNomad DB root — avoids matching the
         # extraction directory itself (also named 'genomad_db').
         DB_PATH=$(find genomad_db -name 'version.txt' -type f | head -1 | xargs -r dirname)
-        [[ -z "${DB_PATH}" ]] && DB_PATH=$(ls -d genomad_db/*/ 2>/dev/null | head -1)
+        [[ -z "${DB_PATH}" ]] && DB_PATH=$(find genomad_db -maxdepth 1 -mindepth 1 -type d 2>/dev/null | head -1)
 
         # Symlink input to a fixed name so output subdirectory names are predictable
         ln -sf ~{merged_fa_gz} input_contigs.fasta.gz
@@ -135,7 +135,7 @@ task Genomad {
         boot_disk_gb:       25,
         preemptible_tries:  2,
         max_retries:        1,
-        docker:             "us-central1-docker.pkg.dev/broad-hvp-dasc/hvp-longread-containers/hvp-monolith:0.0.3"
+        docker:             "us-central1-docker.pkg.dev/broad-hvp-dasc/hvp-longread-containers/genomad:1.12.0"
     }
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
     runtime {

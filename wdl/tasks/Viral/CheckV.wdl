@@ -64,7 +64,7 @@ task CheckV {
             tar -xzf ~{checkv_db_tgz} -C checkv_db
         fi
         DB_PATH=$(find checkv_db -name 'genome_db' -type d | head -1 | xargs dirname)
-        [[ -z "${DB_PATH}" ]] && DB_PATH=$(ls -d checkv_db/*/ | head -1)
+        [[ -z "${DB_PATH}" ]] && DB_PATH=$(find checkv_db -maxdepth 1 -mindepth 1 -type d | head -1)
 
         # Replace spaces with underscores in headers — CheckV truncates at whitespace,
         # causing duplicate IDs when the same base ID appears in multiple tool outputs
@@ -105,7 +105,7 @@ task CheckV {
         boot_disk_gb:       25,
         preemptible_tries:  2,
         max_retries:        1,
-        docker:             "us-central1-docker.pkg.dev/broad-hvp-dasc/hvp-longread-containers/hvp-monolith:0.0.3"
+        docker:             "us-central1-docker.pkg.dev/broad-hvp-dasc/hvp-longread-containers/checkv:1.1.0"
     }
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
     runtime {

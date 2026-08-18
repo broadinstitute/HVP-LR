@@ -59,7 +59,7 @@ task JgiDepth {
         boot_disk_gb:      25,
         preemptible_tries: 2,
         max_retries:       1,
-        docker:            "us-central1-docker.pkg.dev/broad-hvp-dasc/hvp-longread-containers/hvp-monolith:0.0.3"
+        docker:            "us-central1-docker.pkg.dev/broad-hvp-dasc/hvp-longread-containers/hvp-binning:0.1.0"
     }
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
     runtime {
@@ -124,8 +124,8 @@ task MetaBAT2 {
             -a ~{depth_txt} \
             -t "${NUM_CPUS}"
 
-        n_bins=$(ls metabat2_out/bin.*.fa 2>/dev/null | wc -l)
-        echo "MetaBAT2 produced ${n_bins} bins" >&2
+        n_bins=$(find metabat2_out -maxdepth 1 -name 'bin.*.fa' 2>/dev/null | wc -l)
+        echo "MetaBAT2 [~{sample_name}] produced ${n_bins} bins" >&2
     >>>
 
     output {
@@ -139,7 +139,7 @@ task MetaBAT2 {
         boot_disk_gb:      25,
         preemptible_tries: 2,
         max_retries:       1,
-        docker:            "us-central1-docker.pkg.dev/broad-hvp-dasc/hvp-longread-containers/hvp-monolith:0.0.3"
+        docker:            "us-central1-docker.pkg.dev/broad-hvp-dasc/hvp-longread-containers/hvp-binning:0.1.0"
     }
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
     runtime {
@@ -207,8 +207,8 @@ task MaxBin2 {
             -min_contig_length ~{min_contig_length} \
             -thread "${NUM_CPUS}"
 
-        n_bins=$(ls maxbin2_out/bin.*.fasta 2>/dev/null | wc -l)
-        echo "MaxBin2 produced ${n_bins} bins" >&2
+        n_bins=$(find maxbin2_out -maxdepth 1 -name 'bin.*.fasta' 2>/dev/null | wc -l)
+        echo "MaxBin2 [~{sample_name}] produced ${n_bins} bins" >&2
     >>>
 
     output {
@@ -222,7 +222,7 @@ task MaxBin2 {
         boot_disk_gb:      25,
         preemptible_tries: 2,
         max_retries:       1,
-        docker:            "us-central1-docker.pkg.dev/broad-hvp-dasc/hvp-longread-containers/hvp-monolith:0.0.3"
+        docker:            "us-central1-docker.pkg.dev/broad-hvp-dasc/hvp-longread-containers/hvp-binning:0.1.0"
     }
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
     runtime {
@@ -293,8 +293,8 @@ task SemiBin2 {
             [[ -f "$f" ]] && gunzip "$f"
         done
 
-        n_bins=$(ls semibin2_out/output_bins/SemiBin_*.fa 2>/dev/null | wc -l)
-        echo "SemiBin2 produced ${n_bins} bins" >&2
+        n_bins=$(find semibin2_out/output_bins -maxdepth 1 -name 'SemiBin_*.fa' 2>/dev/null | wc -l)
+        echo "SemiBin2 [~{sample_name}] produced ${n_bins} bins" >&2
     >>>
 
     output {
@@ -308,7 +308,7 @@ task SemiBin2 {
         boot_disk_gb:      25,
         preemptible_tries: 2,
         max_retries:       1,
-        docker:            "us-central1-docker.pkg.dev/broad-hvp-dasc/hvp-longread-containers/hvp-monolith:0.0.3"
+        docker:            "us-central1-docker.pkg.dev/broad-hvp-dasc/hvp-longread-containers/hvp-binning:0.1.0"
     }
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
     runtime {

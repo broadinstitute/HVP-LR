@@ -320,7 +320,7 @@ task HifiKraken2 {
         boot_disk_gb:       25,
         preemptible_tries:  3,
         max_retries:        1,
-        docker:             "us-central1-docker.pkg.dev/broad-hvp-dasc/hvp-longread-containers/hvp-monolith:0.0.3"
+        docker:             "us-central1-docker.pkg.dev/broad-hvp-dasc/hvp-longread-containers/kraken2:2.17.1"
     }
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
     runtime {

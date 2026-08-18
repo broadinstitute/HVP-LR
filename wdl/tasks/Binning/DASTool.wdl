@@ -65,7 +65,7 @@ task DASTool {
         # Convert each bin directory to scaffold-to-bin TSV (contig_id <TAB> bin_name)
         fasta_dir_to_s2b() {
             local dir="$1" ext="$2"
-            for f in "${dir}"/*.${ext}; do
+            for f in "${dir}"/*."${ext}"; do
                 [[ -f "$f" ]] || continue
                 bin=$(basename "$f" ".${ext}")
                 grep '^>' "$f" | sed 's/^>//' | awk -v b="$bin" '{print $1"\t"b}'
@@ -88,8 +88,8 @@ task DASTool {
             --score_threshold ~{score_threshold} \
             --threads "${NUM_CPUS}"
 
-        n_bins=$(ls das_tool_out/das_tool_DASTool_bins/*.fa 2>/dev/null | wc -l)
-        echo "DAS_Tool produced ${n_bins} refined bins" >&2
+        n_bins=$(find das_tool_out/das_tool_DASTool_bins -maxdepth 1 -name '*.fa' 2>/dev/null | wc -l)
+        echo "DAS_Tool [~{sample_name}] produced ${n_bins} refined bins" >&2
     >>>
 
     output {
@@ -104,7 +104,7 @@ task DASTool {
         boot_disk_gb:      25,
         preemptible_tries: 2,
         max_retries:       1,
-        docker:            "us-central1-docker.pkg.dev/broad-hvp-dasc/hvp-longread-containers/hvp-monolith:0.0.3"
+        docker:            "us-central1-docker.pkg.dev/broad-hvp-dasc/hvp-longread-containers/hvp-binning:0.1.0"
     }
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
     runtime {
