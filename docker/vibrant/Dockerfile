@@ -16,7 +16,12 @@ COPY --chown=$MAMBA_USER:$MAMBA_USER env.yaml /tmp/env.yaml
 RUN micromamba install -y -n base -f /tmp/env.yaml \
     && micromamba clean --all --yes \
     && find /opt/conda -follow -type f -name '*.a' -delete \
-    && find /opt/conda -follow -type f -name '*.pyc' -delete
+    && find /opt/conda -follow -type f -name '*.pyc' -delete \
+    && rm -rf /opt/conda/pkgs /opt/conda/x86_64-conda-linux-gnu \
+              /opt/conda/share/man /opt/conda/share/doc /opt/conda/share/locale \
+    && { find /opt/conda -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null; \
+         find /opt/conda -type d -name tests -path '*/site-packages/*' -exec rm -rf {} + 2>/dev/null; \
+         find /opt/conda -type d -name include -path '*/site-packages/tensorflow/*' -exec rm -rf {} + 2>/dev/null; true; }
 
 RUN rm -f /opt/conda/lib/python*/site-packages/pip/_vendor/bom.cdx.json \
           /opt/conda/lib/python*/site-packages/pip/_vendor/vendor.txt

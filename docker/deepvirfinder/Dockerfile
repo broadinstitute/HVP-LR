@@ -20,7 +20,12 @@ COPY --chown=$MAMBA_USER:$MAMBA_USER env.yaml /tmp/env.yaml
 RUN micromamba install -y -n base -f /tmp/env.yaml \
     && micromamba run -n base pip install --no-cache-dir theano==1.0.3 keras==2.2.4 \
     && micromamba clean --all --yes \
-    && find /opt/conda -follow -type f -name '*.pyc' -delete
+    && find /opt/conda -follow -type f -name '*.pyc' -delete \
+    && rm -rf /opt/conda/pkgs \
+              /opt/conda/share/man /opt/conda/share/doc /opt/conda/share/locale \
+    && { find /opt/conda -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null; \
+         find /opt/conda -type d -name tests -path '*/site-packages/*' -exec rm -rf {} + 2>/dev/null; \
+         find /opt/conda -type d -name include -path '*/site-packages/tensorflow/*' -exec rm -rf {} + 2>/dev/null; true; }
 
 # DeepVirFinder source (strip .git — runtime doesn't need history).
 USER root

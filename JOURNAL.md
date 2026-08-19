@@ -180,3 +180,31 @@ justified as unreachable/unused-by-any-WDL EOL envs.
 No WDL changes (no task references them; they are on-demand). Note: setuptools
 vendors jaraco.context — versions <84 vendor the vulnerable 5.3.0; pin >=84 if a
 future solve regresses on the other python images (they currently resolve 84).
+
+## 2026-08-19T19:23:00Z — Slim all 16 images (safe strip)
+
+**Context.** Operator asked to shrink the images.
+
+**Decision / action.** Investigated: the /opt/conda/pkgs cache looked like GBs of
+waste but is HARDLINKED to the live env, so docker's tar already dedups it
+(removing it saved only 0.35 GB on binning). Real weight is actual libraries.
+Applied a zero-risk strip to every image's install layer: build-only
+cross-compiler sysroot (/opt/conda/x86_64-conda-linux-gnu, ~470 MB where
+present), tensorflow C++ headers (site-packages/tensorflow/include, ~420 MB on
+checkm2/genomad), share/{man,doc,locale}, package tests/, __pycache__. Skipped
+the sysroot removal on deepvirfinder (theano compiles graphs at runtime).
+
+**Why.** Chose the safe tier only (operator decision). Did NOT trim tensorflow
+itself (libtensorflow_cc.so.2 / tensorflow-cpu) — that could cut ~1 GB more off
+checkm2+genomad but can't be verified against scoring correctness without their
+multi-GB reference DBs, and a silent scoring regression is worse than a big
+image.
+
+**Evidence.** Rebuilt all 16 + re-smoke + Trivy rescan: 16/16 PASS, tools intact.
+Per-image cuts (GB): genomad 5.48->3.85, binning 4.42->3.54, checkm2 3.35->2.90,
+hvp-align 0.83->0.32, vcontact2 1.70->1.49, hvp-qc 2.03->1.79, others 0.05-0.15.
+Fleet sum ~25.7 GB -> ~21.0 GB (~18%). skani/myloasm rose ~0.05 GB (nothing to
+strip; apt-upgrade layer overhead) — negligible.
+
+**Outcome.** All 16 images smaller, still Trivy-clean, tools verified. Aggressive
+tensorflow trim left as a documented future option.
