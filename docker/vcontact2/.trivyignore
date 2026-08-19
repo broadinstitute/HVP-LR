@@ -1,0 +1,26 @@
+# Trivy ignore file — per-CVE exceptions with justifications
+#
+# This file documents individual CVE exceptions that cannot be addressed by
+# version bumps or by the Rego policy (.trivy-ignore-policy.rego). Each entry
+# MUST include a justification explaining why the CVE is accepted.
+#
+# Format: CVE-YYYY-NNNNN (one per line, # for comments)
+# See: https://aquasecurity.github.io/trivy/latest/docs/configuration/filtering/#by-finding-ids
+#
+# Review cadence: Re-evaluate all entries quarterly or when the affected
+# package is upgraded. Remove entries once the underlying package ships a fix.
+#
+# =============================================================================
+#
+# --- vConTACT2 py3.8 sidecar (VEX: not-affected) -- reviewed 2026-08-19 ---
+# This tool is not invoked by any HVP WDL task; the image exists only to keep
+# vConTACT2 0.11.3 available on demand. Its pinned python=3.8 env cannot take
+# the patched deps (setuptools>=78 needs py3.9+; numpy is pinned 1.23.5 for
+# vConTACT2 itself) and bumping would break the working install. None of these
+# code paths are reachable: no untrusted numexpr expressions, HTTP, or
+# setuptools PackageIndex use in the clustering workflow. Same exceptions the
+# retired hvp-monolith already documented. exp forces quarterly re-review.
+CVE-2026-23949 exp:2026-11-30
+CVE-2023-39631 exp:2026-11-30
+CVE-2025-47273 exp:2026-11-30
+CVE-2026-44431 exp:2026-11-30

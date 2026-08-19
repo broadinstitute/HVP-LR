@@ -149,3 +149,34 @@ after SBOM removal).
 
 **Outcome.** All 10 images pass the CI Trivy gate. Two documented VEX exceptions
 tracked with expiry. Local tags `hvp-*:sec`; real refs built by CI.
+
+## 2026-08-19T13:40:00Z — Restore the 11 dropped monolith tools as 6 own images
+
+**Context.** Operator asked to put back the tools dropped during the split
+(deepvirfinder, vcontact2, vibrant, flye, hifiasm_meta, metamdbg, concoct,
+bracken, fastqc, multiqc, standalone diamond) — in their own images to avoid
+bloating the task images.
+
+**Decision / action.** 6 new images grouped by python-env compatibility:
+hvp-qc (fastqc+multiqc), hvp-assemblers (flye+hifiasm_meta+metamdbg per-arch),
+hvp-extra (concoct+bracken+diamond) on py3.12; and the three env-conflicting
+tools solo — vibrant (py3.10), vcontact2 (py3.8), deepvirfinder (py3.6,
+git-cloned + theano/keras pip, KERAS_BACKEND=theano). Recipes/pins verbatim from
+the monolith. Same OS/pip-SBOM security layers as the split images.
+
+**Why.** Grouping only py-compatible tools keeps image count low without
+re-monolithing; the EOL-python trio must stay solo (their pythons conflict).
+
+**Evidence.** All 6 build (amd64, --network=host) and smoke-test: fastqc 0.12.1,
+multiqc 1.35, flye 2.9.6, hifiasm_meta 0.13-r308, metaMDBG, concoct 1.1.0,
+bracken, diamond 2.2.0, VIBRANT_run.py, vcontact2, deepvirfinder (keras 2.2.4 on
+theano backend confirmed). Trivy 10/10... i.e. 6/6 PASS: hvp-qc / hvp-assemblers
+/ vibrant clean; hvp-extra fixed by setuptools>=84 (its _vendor jaraco.context
+was 5.3.0 at 80.8.0); vcontact2 (4 CVEs) and deepvirfinder (6 CVEs) via VEX
+.trivyignore (exp:2026-11-30) — the same exceptions the monolith documents,
+justified as unreachable/unused-by-any-WDL EOL envs.
+
+**Outcome.** All 11 dropped tools available again in 6 small, scan-clean images.
+No WDL changes (no task references them; they are on-demand). Note: setuptools
+vendors jaraco.context — versions <84 vendor the vulnerable 5.3.0; pin >=84 if a
+future solve regresses on the other python images (they currently resolve 84).
