@@ -1,0 +1,24 @@
+# Trivy ignore file — per-CVE exceptions with justifications
+#
+# This file documents individual CVE exceptions that cannot be addressed by
+# version bumps or by the Rego policy (.trivy-ignore-policy.rego). Each entry
+# MUST include a justification explaining why the CVE is accepted.
+#
+# Format: CVE-YYYY-NNNNN (one per line, # for comments)
+# See: https://aquasecurity.github.io/trivy/latest/docs/configuration/filtering/#by-finding-ids
+#
+# Review cadence: Re-evaluate all entries quarterly or when the affected
+# package is upgraded. Remove entries once the underlying package ships a fix.
+#
+# =============================================================================
+#
+# --- ruby json 2.18.0 (VEX: not-affected) — reviewed 2026-08-18 ---
+# CVE-2026-33210 (CRITICAL): DoS / information disclosure via crafted JSON.
+# json 2.18.0 is a COMPILED default gem in the ruby that DAS_Tool=1.1.7 requires;
+# it cannot be replaced via `gem update` (the default gem shadows any newer
+# install) and no patched conda ruby build is available. The CVE requires
+# attacker-controlled JSON input; no binning task (metabat2 / maxbin2 / semibin2
+# / das_tool) parses untrusted JSON via ruby — inputs are FASTA / BAM / depth
+# TSV — so the vulnerable code path is unreachable in this image. Remove once
+# conda-forge ruby ships json>=2.19.2 as its default gem. exp forces re-review.
+CVE-2026-33210 exp:2026-11-30

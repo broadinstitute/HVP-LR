@@ -1,0 +1,29 @@
+# Trivy ignore file — per-CVE exceptions with justifications
+#
+# This file documents individual CVE exceptions that cannot be addressed by
+# version bumps or by the Rego policy (.trivy-ignore-policy.rego). Each entry
+# MUST include a justification explaining why the CVE is accepted.
+#
+# Format: CVE-YYYY-NNNNN (one per line, # for comments)
+# See: https://aquasecurity.github.io/trivy/latest/docs/configuration/filtering/#by-finding-ids
+#
+# Review cadence: Re-evaluate all entries quarterly or when the affected
+# package is upgraded. Remove entries once the underlying package ships a fix.
+#
+# =============================================================================
+#
+# --- DeepVirFinder py3.6 sidecar (VEX: not-affected) -- reviewed 2026-08-19 ---
+# This tool is not invoked by any HVP WDL task; the image exists only to keep
+# DeepVirFinder available on demand. Its python=3.6 env (theano 1.0.3 + keras
+# 2.2.4, per the upstream README) is EOL and cannot take patched keras/
+# setuptools versions without abandoning the pinned, working tool. The keras
+# deserialization CVEs require loading a malicious model; DeepVirFinder loads
+# only its own bundled models and is fed nucleotide FASTA, never model files.
+# Same exceptions the retired hvp-monolith already documented. exp forces
+# quarterly re-review.
+CVE-2024-3660 exp:2026-11-30
+CVE-2025-12060 exp:2026-11-30
+CVE-2026-11816 exp:2026-11-30
+CVE-2026-12481 exp:2026-11-30
+CVE-2024-6345 exp:2026-11-30
+CVE-2025-47273 exp:2026-11-30

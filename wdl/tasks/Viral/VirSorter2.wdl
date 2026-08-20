@@ -124,7 +124,7 @@ PYEOF
         fi
 
         # Dump step3-classify logs to stderr on failure for easier debugging
-        trap '
+        dump_classify_logs() {
           CLASSIFY_LOGDIR="vs2_out/log/iter-0/step3-classify"
           if [ -d "${CLASSIFY_LOGDIR}" ]; then
             for log in "${CLASSIFY_LOGDIR}"/*.log; do
@@ -133,7 +133,8 @@ PYEOF
               cat "${log}" >&2
             done
           fi
-        ' ERR
+        }
+        trap dump_classify_logs ERR
 
         virsorter run \
             -i "${CONTIGS_INPUT}" \
@@ -165,7 +166,7 @@ PYEOF
         boot_disk_gb:       25,
         preemptible_tries:  0,
         max_retries:        1,
-        docker:             "us-central1-docker.pkg.dev/broad-hvp-dasc/hvp-longread-containers/hvp-monolith:0.0.3"
+        docker:             "us-central1-docker.pkg.dev/broad-hvp-dasc/hvp-longread-containers/virsorter2:2.2.4"
     }
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
     runtime {

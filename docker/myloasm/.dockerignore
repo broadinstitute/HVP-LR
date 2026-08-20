@@ -1,0 +1,23 @@
+# Git
+.git/
+.gitignore
+
+# GitHub
+.github/
+
+# Documentation
+README.md
+
+# Scripts (not needed in image)
+scripts/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+
+# Local testing
+*.log
+tmp/
