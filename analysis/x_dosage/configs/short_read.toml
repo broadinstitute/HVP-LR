@@ -1,0 +1,76 @@
+# HVP short-read karyotype config — CALIBRATED (not the example template).
+# Provenance: 56 unrelated-ish euploid 1kGP samples aligned to T2T-CHM13v2.0
+#   (5 superpopulations x ~5/sex Tier-2 + CEU/YRI trios), mosdepth 500bp
+#   windows aggregated to 1Mb. Euploid validation: 56/56 correct, min conf 0.994.
+#   Aneuploidy behavior: clean-multiple XXY/XYY/45,X named; off-multiple/mosaic
+#   -> OTHER by design (see rx_sex.classify docstring). Y-linearity rung is
+#   INSUFFICIENT (no euploid XYY); RY_UNIT/linearity confirmed via Tier-3 XYY
+#   HG03456 (Ry~0.99~=2*0.49). Regenerate: calibrate.py --manifest <euploids>.
+
+platform = "short_read"
+reference = "chm13v2.0_maskedY.rCRS"
+
+[regions]
+par1          = [0, 2394410]
+par2          = [153925834, 154259566]
+y_euchromatin = [2650000, 26000000]
+
+[units]
+rx_unit = 0.4892
+ry_unit = 0.4899
+
+[dispersion]
+sigma_rx_model = 0.0090
+sigma_ry_model = 0.0066
+
+[other]
+rx_max      = 2.5
+ry_max      = 1.5
+prior_other = 0.05
+
+[bootstrap]
+n_boot = 2000
+seed   = 0
+
+[[karyotypes]]
+label = "46,XX"
+n_x = 2
+n_y = 0
+prior = 1.0
+
+[[karyotypes]]
+label = "46,XY"
+n_x = 1
+n_y = 1
+prior = 1.0
+
+[[karyotypes]]
+label = "47,XXY"    # Klinefelter
+n_x = 2
+n_y = 1
+prior = 0.1
+
+[[karyotypes]]
+label = "47,XYY"
+n_x = 1
+n_y = 2
+prior = 0.1
+
+[[karyotypes]]
+label = "47,XXX"
+n_x = 3
+n_y = 0
+prior = 0.1
+
+[[karyotypes]]
+label = "45,X"     # Turner
+n_x = 1
+n_y = 0
+prior = 0.05
+
+[[karyotypes]]
+label = "48,XXYY"
+n_x = 2
+n_y = 2
+prior = 0.01
+

@@ -195,7 +195,18 @@ def boot(xw: list[float], yw: list[float], aw: list[float], cfg: Config):
 
 
 def classify(rx: float, ry: float, se_rx: float, se_ry: float, cfg: Config):
-    """Posterior over the karyotype set + diffuse OTHER, ranked high→low."""
+    """Posterior over the karyotype set + diffuse OTHER, ranked high→low.
+
+    Design note (ratified against real 1kGP T2T-CHM13 controls, 2026-08): the
+    calibrated euploid SIGMA_*_MODEL is genuinely tight (~0.009 at 30x across 5
+    superpopulations, n=56). This is deliberate: a mosaic/partial/off-multiple
+    aneuploidy (e.g. an XYY with Ry 0.92 vs the 0.98 two-copy expectation, or a
+    mosaic XXX at Rx 1.38 vs 1.47) then falls outside every named class and lands
+    in OTHER rather than being force-fit to the nearest karyotype. For sample-swap
+    QC that is the wanted behavior — OTHER still flags the sample as not-clean-
+    euploid; only high-confidence clean karyotypes get a name. Do NOT widen SIGMA
+    to name more aneuploidies without revisiting this trade-off.
+    """
     sx = math.sqrt(cfg.sigma_rx_model**2 + se_rx**2)
     sy = math.sqrt(cfg.sigma_ry_model**2 + se_ry**2)
     sc: dict[str, float] = {}
