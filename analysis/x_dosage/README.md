@@ -4,6 +4,15 @@ Coverage-based sex-chromosome **karyotype** caller (46,XX / 46,XY / 47,XXY /
 47,XYY / 47,XXX / 45,X / 48,XXYY / **OTHER**) on **T2T-CHM13v2.0**. Part of the
 HVP sample-swap fingerprinting effort.
 
+> **⚠️ Maintenance moved.** The scripts + calibrated configs are now maintained in
+> **`docker/x_dosage/src/`** and baked into the **`x_dosage` image**
+> (`…/hvp-longread-containers/x_dosage:<VERSION>`). Run them via the WDL
+> **`wdl/pipelines/TechAgnostic/QC/SexChromKaryotype.wdl`** (mosdepth → classify),
+> not from here. This `analysis/` directory is the **frozen calibration &
+> validation record** (design docs + the calibration/aneuploidy provenance);
+> the code that ships lives in the image. Edit scripts there, bump the image
+> `VERSION`, and update the WDL `tool_version` to match.
+
 ## Why
 
 HVP is a viral-genomics study whose samples carry **human host reads** (not
@@ -41,21 +50,35 @@ Two details that matter:
 
 ## Files
 
+**Code (now in `docker/x_dosage/`):**
+
 | File | What |
 |------|------|
-| `rx_sex.py` | The classifier. `--config <toml>`; stdlib-only core. |
-| `calibrate.py` | Labeled controls → per-platform config (`*_UNIT`, `SIGMA_*`, dosage-linearity check). |
-| `aggregate_to_1mb.py` | Re-bin fine (500 bp) mosdepth windows up to 1 Mb (the granularity the method/bootstrap wants). |
-| `scan_aneuploidy.py` | Find aneuploidy candidates by dosage-vs-reported-sex discordance over mosdepth summaries. |
-| `select_tier2.py` | Pick a balanced euploid panel (5 superpops × N/sex) to stabilize SIGMA. |
-| `config.example.toml` | Format template = the built-in defaults. Copy per platform. |
-| `configs/short_read.toml` | **Calibrated** short-read config (real, see below). Use this for SR. |
-| `pipeline.sh` | Reference glue: FASTQ → align → mosdepth → `rx_sex.py`. |
-| `tests/` | pytest: synthetic clean/mosaic/LOY + calibrate unit tests. |
-| `HANDOFF.md`, `calibration_samples.md` | Design rationale + calibration-set spec. Read these first. |
+| `docker/x_dosage/src/rx_sex.py` | The classifier. `--config <toml>`; stdlib-only core. |
+| `docker/x_dosage/src/calibrate.py` | Labeled controls → per-platform config (`*_UNIT`, `SIGMA_*`, dosage-linearity check). |
+| `docker/x_dosage/src/aggregate_to_1mb.py` | Re-bin fine (500 bp) mosdepth windows up to 1 Mb (only needed for pre-binned calibration data; the WDL runs mosdepth `--by 1000000` directly). |
+| `docker/x_dosage/src/scan_aneuploidy.py` | Find aneuploidy candidates by dosage-vs-reported-sex discordance over mosdepth summaries. |
+| `docker/x_dosage/src/select_tier2.py` | Pick a balanced euploid panel (5 superpops × N/sex) to stabilize SIGMA. |
+| `docker/x_dosage/src/config.example.toml` | Format template = the built-in defaults. |
+| `docker/x_dosage/src/configs/short_read.toml` | **Calibrated** short-read config (baked into the image; the WDL default). |
+| `docker/x_dosage/tests/` | pytest: synthetic clean/mosaic/LOY + calibrate unit tests. |
+| `docker/x_dosage/{Dockerfile,Makefile,env.yaml,…}` | The six-file image build. |
 
-`controls/` (downloaded depth data + per-run configs), `.venv/`, caches and
-`uv.lock` are gitignored — code only in git.
+**Pipeline (WDL):**
+
+| File | What |
+|------|------|
+| `wdl/pipelines/TechAgnostic/QC/SexChromKaryotype.wdl` | Workflow: BAM → mosdepth → karyotype call + confidence. |
+| `wdl/tasks/QC/Mosdepth.wdl` | Windowed depth (1 Mb, MAPQ≥20). |
+| `wdl/tasks/QC/RxSexKaryotype.wdl` | Classify via `rx_sex.py`; emits typed call/confidence/Rx/Ry. |
+
+**This directory (frozen record):**
+
+| File | What |
+|------|------|
+| `HANDOFF.md`, `calibration_samples.md` | Design rationale + calibration-set spec. Read these first. |
+| `pipeline.sh` | Reference glue (FASTQ → align → mosdepth → classify) the WDL was ported from. |
+| `controls/` | Downloaded depth data + per-run configs (gitignored — local only). |
 
 ## Setup
 
@@ -141,11 +164,11 @@ It is a **requester-pays** bucket — `gsutil -u <your-project> cp …`. Reporte
 
 ## Next
 
-- **Tomorrow: WDL + Docker** to run this as a pipeline task (align → mosdepth →
-  `rx_sex.py`), SR and LR. `pipeline.sh` is the reference recipe to port.
+- **DONE: WDL + Docker.** `x_dosage` image + `SexChromKaryotype.wdl`
+  (mosdepth → classify) verified end-to-end (synthetic 46,XY and real 1kGP XXY).
 - Short-read Y-linearity rung is INSUFFICIENT (no XYY among the *euploid*
   calibration samples; confirmed separately via a Tier-3 XYY). Add one XYY to the
   euploid manifest to close it.
-- Long-read euploid calibration (GIAB SR+LR matched).
-- Deferred (HANDOFF TODOs): pipeline wrapper (#1), empirical Y-mask refinement
-  (#4), SR-vs-LR concordance → ntsm/somalier identity layer (#6).
+- Long-read euploid calibration (GIAB SR+LR matched) → emit `long_read.toml`.
+- Deferred (HANDOFF TODOs): empirical Y-mask refinement (#4), SR-vs-LR
+  concordance → ntsm/somalier identity layer (#6, see `../kmer_fingerprint/`).

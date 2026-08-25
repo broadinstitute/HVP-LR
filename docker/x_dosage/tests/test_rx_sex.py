@@ -12,11 +12,15 @@ confirmed on any platform.
 from __future__ import annotations
 
 import gzip
+import os
 import random
 
 import pytest
 
 import rx_sex
+
+# config.example.toml lives next to rx_sex.py in src/, regardless of test cwd.
+EXAMPLE_CONFIG = os.path.join(os.path.dirname(rx_sex.__file__), "config.example.toml")
 
 CFG = rx_sex.default_config()
 
@@ -119,7 +123,7 @@ def test_full_loy_reads_as_turner_known_limitation(tmp_path):
 def test_config_roundtrip_matches_default(tmp_path):
     # config.example.toml is the wired default's serialization: same calls as built-in.
     bed = write_bed(tmp_path / "xy.bed.gz", rx_target=0.5, ry_target=0.5, seed=3)
-    file_cfg = rx_sex.load_config("config.example.toml")
+    file_cfg = rx_sex.load_config(EXAMPLE_CONFIG)
     r_default, _, _ = call_bed(bed, CFG)
     r_file, _, _ = call_bed(bed, file_cfg)
     assert r_default[0][0] == r_file[0][0] == "46,XY"

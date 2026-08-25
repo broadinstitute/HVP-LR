@@ -2,7 +2,7 @@
 name = "karyotype-qc"
 version = "0.1.0"
 description = "Sex-chromosome karyotyping from host coverage for sample-swap QC (T2T-CHM13v2.0)"
-readme = "HANDOFF.md"
+readme = "../../analysis/x_dosage/HANDOFF.md"
 requires-python = ">=3.11"
 # Core (rx_sex.py, calibrate.py) is stdlib-only on purpose — tomllib is stdlib on 3.11+.
 dependencies = []
@@ -18,5 +18,5 @@ target-version = "py311"
 select = ["E", "F", "I", "W", "UP", "B"]
 
 [tool.pytest.ini_options]
-pythonpath = ["."]
+pythonpath = ["src"]
 testpaths = ["tests"]
