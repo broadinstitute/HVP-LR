@@ -1,0 +1,12 @@
+# Environments / caches — never commit
+.venv/
+__pycache__/
+.ruff_cache/
+.pytest_cache/
+uv.lock
+
+# Downloaded control data + emitted per-platform configs (data, not code)
+controls/
+
+# Provided bundle artifact (redundant with the unpacked files)
+karyotype-qc.tar.gz

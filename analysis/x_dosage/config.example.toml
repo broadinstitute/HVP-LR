@@ -1,0 +1,76 @@
+# TARGET format for the config-driven classifier (TODO #2), now wired: rx_sex.py
+# reads this via `--config`. One config per platform (short-read vs long-read have
+# different Y mappability). Values below are the current hardcoded DEFAULTS —
+# replace with calibrated numbers emitted by calibrate.py from labeled controls
+# (see calibration_samples.md).
+
+platform = "short_read"          # or "long_read"
+reference = "chm13v2.0_maskedY.rCRS"
+
+[regions]                        # T2T-CHM13v2.0 bp; verified from chm13v2.0_PAR.bed
+par1          = [0, 2394410]
+par2          = [153925834, 154259566]
+y_euchromatin = [2650000, 26000000]   # APPROXIMATE — refine via censat BED / HG002 depth (TODO #4)
+
+[units]                          # per-copy expectation; CALIBRATE
+rx_unit = 0.50
+ry_unit = 0.50                   # HG002 = ref-Y ceiling; anchor on non-HG002 males
+
+[dispersion]                     # within-group SD from controls; CALIBRATE (Ry noisier)
+sigma_rx_model = 0.05
+sigma_ry_model = 0.08
+
+[other]                          # diffuse class support + prior
+rx_max      = 2.5
+ry_max      = 1.5
+prior_other = 0.05
+
+[bootstrap]
+n_boot = 2000
+seed   = 0
+
+# One table per class: label, n_X, n_Y, prior weight (unnormalized).
+# (TOML requires one field per line — no `;` separators.)
+[[karyotypes]]
+label = "46,XX"
+n_x = 2
+n_y = 0
+prior = 1.00
+
+[[karyotypes]]
+label = "46,XY"
+n_x = 1
+n_y = 1
+prior = 1.00
+
+[[karyotypes]]
+label = "47,XXY"    # Klinefelter
+n_x = 2
+n_y = 1
+prior = 0.10
+
+[[karyotypes]]
+label = "47,XYY"
+n_x = 1
+n_y = 2
+prior = 0.10
+
+[[karyotypes]]
+label = "47,XXX"
+n_x = 3
+n_y = 0
+prior = 0.10
+
+[[karyotypes]]
+label = "45,X"      # Turner
+n_x = 1
+n_y = 0
+prior = 0.05
+
+[[karyotypes]]
+label = "48,XXYY"
+n_x = 2
+n_y = 2
+prior = 0.01
+
+# extend: 48,XXXY=(3,1) 48,XXXX=(4,0) 49,XXXXY=(4,1) ...
